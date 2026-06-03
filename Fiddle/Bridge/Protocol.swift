@@ -68,7 +68,7 @@ enum SettingsPane: String, Codable {
 }
 
 enum WindowAction: String, Codable {
-    case minimize, close, help, fit, showWindow, quit
+    case minimize, close, help, fit, showWindow, quit, checkForUpdates
 }
 
 enum RunStatus: String, Codable {

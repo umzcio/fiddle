@@ -565,9 +565,10 @@
 <div class="about-overlay" id="aboutOverlay" hidden>
   <div class="about-card">
     <div class="about-flame"><img src="fiddle-logo.png" alt="fiddle"></div>
-    <div class="about-name">fiddle <span>1.0</span></div>
+    <div class="about-name">fiddle <span id="aboutVer">1.0</span></div>
     <p class="about-body">A loving tribute to Nero StartSmart. Nero fiddled while Rome burned; fiddle fiddles with your mouse while you are away.</p>
     <div class="about-actions">
+      <button class="about-gh" id="aboutUpdate">Check for Updates</button>
       <button class="about-gh" id="aboutGh">View on GitHub</button>
       <button class="about-close" id="aboutClose">Close</button>
     </div>
@@ -730,6 +731,12 @@
     content.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>selectCat(el.dataset.go));
   }
 
+  // Persist the current mode's config immediately, so any start path (global
+  // hotkey, menu bar, the flame) uses what the user actually set rather than the
+  // last-started snapshot. Without this, editing the rate then starting via the
+  // hotkey would run the stale saved interval.
+  function persist(){ const m=currentMode(); send({type:'updateConfig', mode:m, config:currentConfig(m)}); }
+
   function viewClicker(){
     if(state.device==='keyboard') return viewKeyboard();
     const c=state.clicker;
@@ -768,20 +775,21 @@
           X <input class="field" id="px" value="${c.x}"> Y <input class="field" id="py" value="${c.y}">
         </div>
       </div>`;
-    bind('iv-h', v=>c.hrs=+v||0);
-    bind('iv-m', v=>c.min=+v||0);
-    bind('iv-s', v=>c.sec=+v||0);
-    bind('iv-ms', v=>c.ms=+v||0);
-    document.getElementById('btn').onchange=e=>c.button=e.target.value;
-    seg('ctype', v=>c.type=v);
-    content.querySelectorAll('[name=rep]').forEach(r=>r.onchange=e=>c.repeat=e.target.value);
+    bind('iv-h', v=>{c.hrs=+v||0; persist();});
+    bind('iv-m', v=>{c.min=+v||0; persist();});
+    bind('iv-s', v=>{c.sec=+v||0; persist();});
+    bind('iv-ms', v=>{c.ms=+v||0; persist();});
+    document.getElementById('btn').onchange=e=>{c.button=e.target.value; persist();};
+    seg('ctype', v=>{c.type=v; persist();});
+    content.querySelectorAll('[name=rep]').forEach(r=>r.onchange=e=>{c.repeat=e.target.value; persist();});
     content.querySelectorAll('[name=pos]').forEach(r=>r.onchange=e=>{
       c.pos=e.target.value;
       if(e.target.value==='pick') send({type:'pickPosition'}); // engine enters position-pick mode
+      persist();
     });
-    bind('times', v=>c.times=+v||0);
-    bind('px', v=>c.x=+v||0);
-    bind('py', v=>c.y=+v||0);
+    bind('times', v=>{c.times=+v||0; persist();});
+    bind('px', v=>{c.x=+v||0; persist();});
+    bind('py', v=>{c.y=+v||0; persist();});
   }
 
   function keyboardConfig(){
@@ -863,11 +871,11 @@
           <span class="hint">pause jiggling while you are actively using the Mac</span></div>
       </div>`;
     const r=document.getElementById('jd');
-    r.oninput=e=>{j.dist=+e.target.value;document.getElementById('jdval').textContent=j.dist};
-    bind('js', v=>j.secs=+v||0);
-    seg('jmode', v=>j.mode=v);
-    toggle('tg-wake', v=>j.wake=v);
-    toggle('tg-idle', v=>j.idleOnly=v);
+    r.oninput=e=>{j.dist=+e.target.value;document.getElementById('jdval').textContent=j.dist; persist();};
+    bind('js', v=>{j.secs=+v||0; persist();});
+    seg('jmode', v=>{j.mode=v; persist();});
+    toggle('tg-wake', v=>{j.wake=v; persist();});
+    toggle('tg-idle', v=>{j.idleOnly=v; persist();});
   }
 
   function viewWakeLock(){
@@ -1255,8 +1263,8 @@
         <div class="row"><span class="hint">Press the flame to ${tab==='click'?'click at the cursor':'jiggle'}, again to stop. Or use the panic key.</span></div>
       </div>`;
     seg('simpleTab', v=>{ state.simpleTab=v; viewSimple(); applyBanner(); });
-    if(tab==='click'){ bind('sc-rate', v=>c.rate=Math.max(1,+v||1)); bindSel('sc-unit', v=>c.rateUnit=v); }
-    else { bind('sj-s', v=>j.secs=+v||0); }
+    if(tab==='click'){ bind('sc-rate', v=>{c.rate=Math.max(1,+v||1); persist();}); bindSel('sc-unit', v=>{c.rateUnit=v; persist();}); }
+    else { bind('sj-s', v=>{j.secs=+v||0; persist();}); }
   }
 
   function viewMenubar(){
@@ -1289,8 +1297,8 @@
           <button class="btn-reset" id="mQuit">Quit</button></div>
       </div>`;
     seg('mTab', v=>{ state.simpleTab=v; viewMenubar(); applyBanner(); });
-    if(tab==='click'){ bind('mc-rate', v=>c.rate=Math.max(1,+v||1)); bindSel('mc-unit', v=>c.rateUnit=v); }
-    else { bind('mj-s', v=>j.secs=+v||0); }
+    if(tab==='click'){ bind('mc-rate', v=>{c.rate=Math.max(1,+v||1); persist();}); bindSel('mc-unit', v=>{c.rateUnit=v; persist();}); }
+    else { bind('mj-s', v=>{j.secs=+v||0; persist();}); }
     document.getElementById('mOpen').onclick=()=>send({type:'window', action:'showWindow'});
     document.getElementById('mQuit').onclick=()=>send({type:'window', action:'quit'});
     content.querySelectorAll('[data-applyprof]').forEach(b=>b.onclick=()=>send({type:'applyProfile', id:b.dataset.applyprof}));
@@ -1592,8 +1600,13 @@
       info.onclick=()=>{ overlay.hidden=false; };
       document.getElementById('aboutClose').onclick=()=>{ overlay.hidden=true; };
       document.getElementById('aboutGh').onclick=()=>{ overlay.hidden=true; send({type:'window', action:'help'}); };
+      const upd=document.getElementById('aboutUpdate');
+      if(upd) upd.onclick=()=>{ overlay.hidden=true; send({type:'window', action:'checkForUpdates'}); };
       overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.hidden=true; });
     }
+    // Show the real app version (injected by the native bridge).
+    const ver=document.getElementById('aboutVer');
+    if(ver && window.__fiddleVersion) ver.textContent = window.__fiddleVersion;
     const modeToggle=document.getElementById('modeToggle');
     if(modeToggle) modeToggle.querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.v));
   })();

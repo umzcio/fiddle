@@ -43,6 +43,9 @@ final class MainWindowController: NSObject, BridgeHost {
     let window: FiddleWindow
     private(set) var bridge: FiddleBridge!
     let controller: FiddleController
+    /// Wired by the app delegate (which owns the Sparkle updater) so the About
+    /// overlay's "Check for Updates" button can trigger an update check.
+    var onCheckForUpdates: (() -> Void)?
     private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
     private weak var hostedWebView: WKWebView?
 
@@ -124,6 +127,8 @@ final class MainWindowController: NSObject, BridgeHost {
             }
         case .fit:
             fitToContent()
+        case .checkForUpdates:
+            onCheckForUpdates?()
         default:
             break
         }

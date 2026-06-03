@@ -37,6 +37,7 @@
 		0A00000000000000000000A8 /* KeyEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000A9 /* KeyEngine.swift */; };
 		0A0000000000000000000038 /* FiddleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000028 /* FiddleController.swift */; };
 		0A0000000000000000000052 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 0A0000000000000000000051 /* KeyboardShortcuts */; };
+		0A00000000000000000000B1 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 0A00000000000000000000B2 /* Sparkle */; };
 		0A0000000000000000000075 /* ProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000070 /* ProtocolTests.swift */; };
 		0A0000000000000000000076 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000071 /* SettingsTests.swift */; };
 		0A0000000000000000000077 /* ClickEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000072 /* ClickEngineTests.swift */; };
@@ -107,6 +108,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A0000000000000000000052 /* KeyboardShortcuts in Frameworks */,
+				0A00000000000000000000B1 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -240,6 +242,7 @@
 			name = Fiddle;
 			packageProductDependencies = (
 				0A0000000000000000000051 /* KeyboardShortcuts */,
+				0A00000000000000000000B2 /* Sparkle */,
 			);
 			productName = Fiddle;
 			productReference = 0A0000000000000000000018 /* Fiddle.app */;
@@ -293,6 +296,7 @@
 			mainGroup = 0A0000000000000000000002;
 			packageReferences = (
 				0A0000000000000000000050 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				0A00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			productRefGroup = 0A0000000000000000000003 /* Products */;
 			projectDirPath = "";
@@ -442,9 +446,8 @@
 				DEVELOPMENT_TEAM = 5JJ6G6A84S;
 				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Fiddle/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -468,9 +471,8 @@
 				DEVELOPMENT_TEAM = 5JJ6G6A84S;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Fiddle/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -555,6 +557,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		0A00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -562,6 +572,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 0A0000000000000000000050 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		0A00000000000000000000B2 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0A00000000000000000000B3 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,4 +1,5 @@
 import SwiftUI
+import Sparkle
 
 @main
 struct FiddleApp: App {
@@ -22,13 +23,23 @@ struct FiddleApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = FiddleController()
     private var mainWindowController: MainWindowController?
+    // Sparkle auto-updater. Reads SUFeedURL + SUPublicEDKey from Info.plist and,
+    // with SUEnableAutomaticChecks, checks the appcast in the background.
+    private var updaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         controller.menuState = MenuState.shared
+        updaterController = SPUStandardUpdaterController(startingUpdater: true,
+                                                         updaterDelegate: nil,
+                                                         userDriverDelegate: nil)
         let wc = MainWindowController(controller: controller)
+        wc.onCheckForUpdates = { [weak self] in self?.checkForUpdates() }
         mainWindowController = wc
         wc.show()
     }
+
+    /// Triggered by the About overlay's "Check for Updates" button.
+    func checkForUpdates() { updaterController?.checkForUpdates(nil) }
 
     func showMainWindow() { mainWindowController?.show() }
 

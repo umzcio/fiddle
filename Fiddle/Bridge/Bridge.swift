@@ -51,10 +51,12 @@ final class FiddleBridge: NSObject {
 
         let configuration = WKWebViewConfiguration()
         let controller = WKUserContentController()
+        let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "1.0"
+        var boot = "window.__fiddleVersion = '\(version)';"
         if let surface {
-            let js = "window.__fiddleSurface = '\(surface)';"
-            controller.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            boot += " window.__fiddleSurface = '\(surface)';"
         }
+        controller.addUserScript(WKUserScript(source: boot, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         configuration.userContentController = controller
 
         let webView = FiddleWebView(frame: .zero, configuration: configuration)

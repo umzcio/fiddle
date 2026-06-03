@@ -15,6 +15,9 @@ VERSION="${1:?usage: release.sh <version>  e.g. 1.0.0}"
 APP_NAME="Fiddle"
 APP_DIR="$ROOT/build/$APP_NAME.app"
 DMG="$ROOT/build/$APP_NAME-$VERSION.dmg"
+DIST="$ROOT/build/dist"
+DOWNLOAD_URL_PREFIX="https://github.com/umzcio/fiddle/releases/download/v$VERSION/"
+SPARKLE_BIN="$ROOT/build/SourcePackages/artifacts/sparkle/Sparkle/bin"
 
 echo "==> [1/5] Build + sign app"
 bash "$ROOT/scripts/build-app.sh"
@@ -31,5 +34,20 @@ bash "$ROOT/scripts/make-dmg.sh" "$VERSION"
 # The repackaged dmg is a new file, so it needs its own notarization + staple.
 bash "$ROOT/scripts/notarize.sh" "$DMG"
 
-echo "==> [5/5] Done"
-echo "  DMG: $DMG  ->  upload to the v$VERSION GitHub release"
+echo "==> [5/6] Generate the signed Sparkle appcast"
+# generate_appcast reads the EdDSA private key from the keychain, signs the dmg,
+# and writes appcast.xml with the GitHub-release enclosure URL. Copy it to the
+# repo root so SUFeedURL (raw.githubusercontent.com/.../main/appcast.xml) resolves.
+rm -rf "$DIST"; mkdir -p "$DIST"
+cp "$DMG" "$DIST/"
+"$SPARKLE_BIN/generate_appcast" "$DIST" --download-url-prefix "$DOWNLOAD_URL_PREFIX"
+cp "$DIST/appcast.xml" "$ROOT/appcast.xml"
+
+echo "==> [6/6] Done"
+echo "  DMG     : $DMG"
+echo "  appcast : $ROOT/appcast.xml"
+echo
+echo "  Next:"
+echo "    1) gh release create v$VERSION \"$DMG\" --title \"fiddle $VERSION\" --notes \"...\""
+echo "       (or: gh release upload v$VERSION \"$DMG\" --clobber  to replace an existing release asset)"
+echo "    2) git add appcast.xml && git commit -m \"appcast: $VERSION\" && git push   (so the update feed goes live)"
