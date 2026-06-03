@@ -1,0 +1,141 @@
+<!-- fiddle - M4 skin preview (static, no app wiring). 4 themes side by side. -->
+<meta charset="utf-8">
+<title>fiddle skins</title>
+<style>
+  :root{
+    --chrome-hi:#f3f4f6;--chrome-lt:#dfe1e6;--chrome-md:#b6bac1;--chrome-dk:#83878e;--chrome-edge:#5c5f65;
+    --font-ui:"Tahoma","Geneva","Verdana",sans-serif;
+    --font-disp:"Trebuchet MS","Tahoma",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:var(--font-ui);color:#10110f;
+    background:radial-gradient(120% 90% at 50% -10%, #5b626b 0%, #3b4047 45%, #23262b 100%);
+    min-height:100vh;padding:30px 22px 50px;-webkit-font-smoothing:antialiased;
+  }
+  h1{font-family:var(--font-disp);color:#eef0f3;font-size:22px;font-weight:700;text-align:center;margin-bottom:4px;
+     text-shadow:0 1px 0 rgba(0,0,0,.5)}
+  .sub{color:#aab0b8;text-align:center;font-size:12.5px;margin-bottom:26px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:30px 26px;max-width:920px;margin:0 auto}
+
+  /* per-skin accent variables (the ONLY thing M4 swaps) */
+  .red   {--glow:#e2381f;--bri:#bf1410;--mid:#7e0606;--dk:#350202;--edge:#2c0303;--c1:#e4453a;--c2:#7e0606}
+  .cobalt{--glow:#4f93ff;--bri:#1f5fd0;--mid:#0d3a8c;--dk:#061d40;--edge:#07193a;--c1:#4f93ff;--c2:#0d3a8c}
+  .graphite{--glow:#9aa2ad;--bri:#444a53;--mid:#272a30;--dk:#121317;--edge:#0b0c0e;--c1:#9aa2ad;--c2:#272a30}
+  .emerald{--glow:#3fe093;--bri:#1f9e57;--mid:#0c6636;--dk:#042916;--edge:#042916;--c1:#3fe093;--c2:#0c6636}
+
+  .label{font-family:var(--font-disp);font-weight:700;color:#eef0f3;font-size:14px;margin:0 0 9px 4px;letter-spacing:.2px}
+  .label small{color:#9aa0a8;font-weight:400;font-family:var(--font-ui);font-size:11px;margin-left:7px}
+
+  /* ===== chrome shell (verbatim from the app) ===== */
+  .shell{
+    border-radius:22px;padding:6px;position:relative;
+    background:linear-gradient(180deg,var(--chrome-hi) 0%,var(--chrome-lt) 14%,var(--chrome-md) 52%,var(--chrome-dk) 100%);
+    box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 -2px 6px rgba(0,0,0,.25) inset,0 18px 40px rgba(0,0,0,.5),0 3px 10px rgba(0,0,0,.4);
+    border:1px solid var(--chrome-edge);
+  }
+  .shell::before{content:"";position:absolute;left:6px;right:6px;top:6px;height:46%;border-radius:18px 18px 36px 36px;
+    background:linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 70%);pointer-events:none;z-index:30}
+  .frame{border-radius:17px;background:linear-gradient(180deg,#cfd2d7,#a7abb2 60%,#8a8e95);padding:8px 10px 10px;
+    border:1px solid #6f7378;box-shadow:0 1px 0 rgba(255,255,255,.7) inset,0 -1px 4px rgba(0,0,0,.2) inset}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 3px}
+  .logo{font-family:var(--font-disp);font-weight:700;font-size:24px;letter-spacing:-1px;color:#2a2d31;
+    text-shadow:0 1px 0 #fff,0 -1px 0 rgba(0,0,0,.25);user-select:none}
+  .logo b{color:var(--bri);text-shadow:0 1px 0 #fff}
+  .logo .pip{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:5px;vertical-align:7px;
+    background:radial-gradient(circle at 35% 28%,#fff,var(--bri) 60%,var(--dk));
+    box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 0 6px var(--glow)}
+  .pill{display:flex;align-items:center;gap:6px;background:linear-gradient(180deg,#5b5f65,#2c2e32);
+    border:1px solid #1c1d20;border-radius:999px;padding:4px 5px 4px 12px;
+    box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 2px 5px rgba(0,0,0,.4)}
+  .pill .pl{color:#aeb3bb;font-size:10px;font-weight:700}
+  .pill .pv{color:#fff;font-size:10px;font-weight:700}
+  .pill .caret{width:19px;height:18px;border-radius:5px;display:grid;place-items:center;color:#fff;font-size:8px;
+    background:linear-gradient(180deg,var(--c1),var(--c2));border:1px solid rgba(0,0,0,.4);
+    box-shadow:0 1px 0 rgba(255,255,255,.4) inset}
+
+  /* ===== the stage (the colored panel that the skin recolors) ===== */
+  .stage{margin-top:7px;border-radius:14px;position:relative;overflow:hidden;border:1px solid var(--edge);color:#fff;
+    background:radial-gradient(130% 120% at 50% 8%,var(--glow) 0%,var(--bri) 26%,var(--mid) 62%,var(--dk) 100%);
+    box-shadow:0 2px 9px rgba(0,0,0,.45) inset,0 0 0 1px rgba(255,255,255,.18) inset;
+    min-height:208px;display:flex;flex-direction:column}
+  .stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 120% at -8% 120%,rgba(255,255,255,.16),transparent 55%),
+              radial-gradient(70% 90% at 115% -10%,rgba(255,255,255,.12),transparent 55%)}
+  .stage::before{content:"";position:absolute;left:0;right:0;top:0;height:64px;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.22),transparent)}
+
+  .cats{display:flex;gap:5px;padding:11px 14px 0;position:relative;z-index:2}
+  .cat{width:40px;height:38px;border-radius:9px;position:relative;display:grid;place-items:center}
+  .cat::before{content:"";position:absolute;inset:1px;border-radius:8px;
+    background:linear-gradient(180deg,#fdfefe,#c6cbd2 55%,#9aa0a8);
+    box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 2px 4px rgba(0,0,0,.35)}
+  .cat.sel::before{background:linear-gradient(180deg,#fff,var(--glow) 130%);box-shadow:0 0 0 2px rgba(255,255,255,.5),0 2px 6px rgba(0,0,0,.45)}
+  .cat svg{position:relative;z-index:1;width:20px;height:20px}
+
+  .body{flex:1;display:flex;padding:12px 16px 0;gap:12px;position:relative;z-index:2}
+  .side{width:34%;border-radius:9px;background:linear-gradient(180deg,#eef2f8,#c2cad6);border:1px solid #9aa4b4;
+    box-shadow:0 1px 0 rgba(255,255,255,.7) inset;padding:7px 8px}
+  .side .it{height:9px;border-radius:3px;background:linear-gradient(90deg,#aeb6c4,#cfd6e1);margin-bottom:6px}
+  .side .it.on{background:linear-gradient(180deg,#7aa6ee,#2050a6)}
+  .main{flex:1;color:#fff}
+  .main .ttl{font-family:var(--font-disp);font-weight:700;font-size:13px;text-shadow:0 1px 1px rgba(0,0,0,.4);margin-bottom:8px}
+  .main .fld{height:11px;border-radius:4px;background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.18);margin-bottom:7px}
+  .main .fld.short{width:55%}
+
+  .dock{display:flex;align-items:center;justify-content:space-between;padding:9px 14px 12px;position:relative;z-index:2}
+  .status{display:flex;align-items:center;gap:7px}
+  .led{width:11px;height:11px;border-radius:50%;background:linear-gradient(180deg,#cfd4da,#7d838b);
+    box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 2px rgba(0,0,0,.4)}
+  .led.live{background:linear-gradient(180deg,#dbffb4,#5cd62c 45%,#2c8b16);box-shadow:0 0 8px #6ff03a,0 0 0 1px rgba(0,0,0,.3)}
+  .status span{font-size:11px;color:rgba(255,255,255,.85)}
+  .orb{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;
+    background:radial-gradient(circle at 38% 30%,#ffd9a0,#ff7a18 45%,#b5350a 100%);
+    box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.3),0 0 16px rgba(255,140,40,.6),0 1px 0 rgba(255,255,255,.5) inset}
+  .orb svg{width:30px;height:30px}
+</style>
+
+<h1>fiddle skins</h1>
+<div class="sub">Same chrome, bezel, sidebar, and dock in every theme. Only the stage color, accent, and pip/caret change. Pick one as default; all 4 ship.</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+  const flame='<svg viewBox="0 0 24 24"><path d="M12 2c1 4-3 5-3 9a3 3 0 0 0 6 0c0-1-1-2-1-3 2 1 3 3 3 5a6 6 0 0 1-12 0c0-5 6-6 7-11z" fill="#fff"/></svg>';
+  function tile(cls,name,note){
+    return `<div>
+      <div class="label">${name}<small>${note}</small></div>
+      <div class="shell ${cls}"><div class="frame">
+        <div class="topbar">
+          <div class="logo">f<b>iddl</b>e<span class="pip"></span></div>
+          <div class="pill"><span class="pl">Device</span><span class="pv">Mouse</span><span class="caret">▾</span></div>
+        </div>
+        <div class="stage">
+          <div class="cats">
+            <div class="cat sel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="#2050a6" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="#2050a6"/></svg></div>
+            <div class="cat"><svg viewBox="0 0 24 24"><path d="M4 12h16M4 12l3-3M4 12l3 3M20 12l-3-3M20 12l-3 3" fill="none" stroke="#2050a6" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="cat"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="11" rx="2" fill="none" stroke="#2050a6" stroke-width="1.6"/></svg></div>
+            <div class="cat"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#2050a6" stroke-width="1.8"/><path d="M12 8v4l3 2" stroke="#2050a6" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></div>
+          </div>
+          <div class="body">
+            <div class="side"><div class="it on"></div><div class="it"></div><div class="it"></div><div class="it"></div></div>
+            <div class="main">
+              <div class="ttl">Auto Clicker</div>
+              <div class="fld"></div><div class="fld short"></div><div class="fld"></div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="status"><span class="led live"></span><span>Running</span></div>
+            <div class="orb">${flame}</div>
+          </div>
+        </div>
+      </div></div>
+    </div>`;
+  }
+  document.getElementById('grid').innerHTML =
+    tile('red','Nero Red','#bf1410 - default')+
+    tile('cobalt','Cobalt','#1f5fd0')+
+    tile('graphite','Graphite','#444a53')+
+    tile('emerald','Emerald','#1f9e57');
+</script>

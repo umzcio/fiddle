@@ -1,0 +1,27 @@
+# Build output
+build/
+DerivedData/
+*.xcresult
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# Signing / notarization secrets, never commit (this repo is public)
+scripts/.notary-config.local
+*.p8
+
+# Playwright MCP scratch (screenshots, traces)
+.playwright-mcp/
+
+# Internal, not for the public repo
+docs/superpowers/
+CLAUDE.md
+
+# macOS
+.DS_Store
