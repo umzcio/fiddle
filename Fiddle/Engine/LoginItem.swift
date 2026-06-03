@@ -9,7 +9,7 @@ import ServiceManagement
 import os
 
 enum LoginItem {
-    private static let log = Logger(subsystem: "app.fiddle.Fiddle", category: "loginitem")
+    private static let log = Logger(subsystem: "edu.umontana.fiddle", category: "loginitem")
 
     static var isEnabled: Bool { SMAppService.mainApp.status == .enabled }
 

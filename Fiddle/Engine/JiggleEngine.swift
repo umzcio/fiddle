@@ -52,7 +52,7 @@ struct CGCursorMover: CursorMoving {
 final class JiggleEngine {
     private let mover: CursorMoving
     private let power = PowerAssertion()
-    private let queue = DispatchQueue(label: "app.fiddle.jiggleengine", qos: .utility)
+    private let queue = DispatchQueue(label: "edu.umontana.fiddle.jiggleengine", qos: .utility)
     private var timer: DispatchSourceTimer?
     private var config: JigglerConfig?
     private var direction = 1

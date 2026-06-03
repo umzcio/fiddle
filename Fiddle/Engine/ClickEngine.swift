@@ -111,7 +111,7 @@ struct CGEventMousePoster: MouseEventPosting {
 
 final class ClickEngine {
     private let poster: MouseEventPosting
-    private let queue = DispatchQueue(label: "app.fiddle.clickengine", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "edu.umontana.fiddle.clickengine", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var runState: ClickRunState?
     private var running = false

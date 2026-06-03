@@ -24,7 +24,7 @@ final class PowerAssertion {
     private let kind: Kind
     private var assertionID = IOPMAssertionID(0)
     private var active = false
-    private let log = Logger(subsystem: "app.fiddle.Fiddle", category: "power")
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "power")
 
     init(kind: Kind = .displaySleep) { self.kind = kind }
 

@@ -44,7 +44,7 @@ final class FiddleBridge: NSObject {
     /// other command is forwarded here.
     weak var controller: FiddleController?
 
-    private let log = Logger(subsystem: "app.fiddle.Fiddle", category: "bridge")
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "bridge")
 
     init(host: BridgeHost?, surface: String? = nil) {
         self.host = host

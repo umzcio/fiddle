@@ -47,7 +47,7 @@ final class FiddleController {
     private let hotkeys = HotkeyManager()
     private let picker = PositionPicker()
     private let clickSound = ClickSound()
-    private let log = Logger(subsystem: "app.fiddle.Fiddle", category: "controller")
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "controller")
 
     private var status: RunStatus = .idle
     private var lastMode: AutomationMode = .clicker

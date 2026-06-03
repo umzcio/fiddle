@@ -13,7 +13,7 @@ import Foundation
 final class AntiAFKEngine {
     private let mover: CursorMoving
     private let power = PowerAssertion(kind: .displaySleep)
-    private let queue = DispatchQueue(label: "app.fiddle.antiafk", qos: .utility)
+    private let queue = DispatchQueue(label: "edu.umontana.fiddle.antiafk", qos: .utility)
     private var timer: DispatchSourceTimer?
     private var config: AntiAFKConfig?
     private var direction = 1

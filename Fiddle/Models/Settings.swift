@@ -88,7 +88,7 @@ final class SettingsStore {
     private static let key = "fiddle.settings.v1"
     private let defaults: UserDefaults
     private(set) var settings: Settings
-    private let log = Logger(subsystem: "app.fiddle.Fiddle", category: "settings")
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "settings")
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

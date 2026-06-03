@@ -70,7 +70,7 @@ struct CGKeyEventPoster: KeyEventPosting {
 
 final class KeyEngine {
     private let poster: KeyEventPosting
-    private let queue = DispatchQueue(label: "app.fiddle.keyengine", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "edu.umontana.fiddle.keyengine", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var runState: KeyRunState?
     private var running = false

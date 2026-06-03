@@ -43,7 +43,7 @@ final class MainWindowController: NSObject, BridgeHost {
     let window: FiddleWindow
     private(set) var bridge: FiddleBridge!
     let controller: FiddleController
-    private let log = Logger(subsystem: "app.fiddle.Fiddle", category: "window")
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
     private weak var hostedWebView: WKWebView?
 
     // Initial size; replaced by the measured shell size once the UI loads.
