@@ -149,6 +149,11 @@ final class FiddleController {
         if clickRecorder.isRecording { endRecording() }
         saveConfig(mode: mode, config: config)
         stopEngines()
+        // Everything is stopped now; say so before the guards below can bail.
+        // Without this, an early return (permission denied, empty recording,
+        // missing macro) leaves the LED and toggleStartStop stuck on Running
+        // with nothing running.
+        setStatus(.idle)
         switch mode {
         case .clicker:
             // Posting synthetic clicks requires Accessibility.
@@ -443,7 +448,13 @@ final class FiddleController {
             broadcast(.error(message: "Input Monitoring permission is required to record. Grant it in System Settings, then relaunch."))
             return
         }
-        playbackEngine.stop()
+        // Stopping a running engine here must go through stopAll so the run
+        // status follows; a bare engine stop leaves the LED stuck on Running.
+        if status == .running {
+            stopAll()
+        } else {
+            playbackEngine.stop()
+        }
         clickRecorder.start()
         // Tap creation can fail even with the permission reported granted
         // (granting Input Monitoring mid-session takes effect at relaunch).
