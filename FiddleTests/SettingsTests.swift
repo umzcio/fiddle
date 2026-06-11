@@ -161,6 +161,23 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(migrated.recording.isEmpty)
     }
 
+    // One corrupt array element must not reset everything: the bad entry is
+    // dropped and the rest of the settings survive.
+    func testCorruptArrayElementIsDroppedNotFatal() throws {
+        let blob = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true},
+         "profiles":[{"id":"p1","name":"Good","device":"mouse"}, 42, {"id":"p2","name":"Also good","device":"mouse"}],
+         "macros":[{"id":"m1","name":"A","steps":[]}, "corrupt"],
+         "recording":[{"kind":"down","button":"left","x":1,"y":1,"delayMs":0}, {"kind":"down","button":7,"x":1,"y":1,"delayMs":0}]}
+        """
+        let s = try JSONDecoder().decode(Settings.self, from: Data(blob.utf8))
+        XCTAssertEqual(s.profiles.map(\.id), ["p1", "p2"])
+        XCTAssertEqual(s.macros.map(\.id), ["m1"])
+        XCTAssertEqual(s.recording.count, 1)
+        XCTAssertEqual(s.clicker.intervalMs, 100)
+    }
+
     func testRecorderConfigRoundTripAndLegacyDecode() throws {
         var s = Settings.default
         s.recorder = RecorderConfig(repeat: .times, times: 9)

@@ -453,6 +453,10 @@ final class FiddleController {
         emitRecording(to: sink)
         emitMacros(to: sink)
         emitProfiles(to: sink)
+        if store.didResetToDefaults {
+            store.acknowledgeReset()
+            send(.error(message: "Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key."), to: sink)
+        }
     }
 
     /// Persist a config edit. Returns false when the (mode, config) shapes do

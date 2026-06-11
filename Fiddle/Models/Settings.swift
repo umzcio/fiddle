@@ -10,6 +10,33 @@
 import Foundation
 import os
 
+/// Decodes an array element by element, dropping elements that fail, so one
+/// corrupt entry cannot discard every profile, macro, and recorded event at
+/// once when the settings blob loads.
+struct LossyArray<Element: Decodable>: Decodable {
+    var elements: [Element]
+
+    /// Consumes one element of any shape to advance past an undecodable entry.
+    private struct Discard: Decodable {
+        init(from decoder: Decoder) throws {}
+    }
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var out: [Element] = []
+        while !container.isAtEnd {
+            let index = container.currentIndex
+            if let value = try? container.decode(Element.self) {
+                out.append(value)
+            } else {
+                _ = try? container.decode(Discard.self)
+            }
+            if container.currentIndex == index { break }   // cannot advance; bail
+        }
+        elements = out
+    }
+}
+
 // Note: launch-at-login is intentionally NOT stored here. SMAppService owns
 // that state (the user can change it in System Settings behind our back), so
 // the UI always reads LoginItem.isEnabled live; a stored copy only drifts.
@@ -80,11 +107,13 @@ struct Settings: Codable, Equatable {
         prefs = try c.decodeIfPresent(AppPrefs.self, forKey: .prefs) ?? .default
         wakeLock = try c.decodeIfPresent(WakeLockConfig.self, forKey: .wakeLock) ?? WakeLockConfig(keepDisplayAwake: true, keepSystemAwake: false)
         antiAFK  = try c.decodeIfPresent(AntiAFKConfig.self,  forKey: .antiAFK)  ?? AntiAFKConfig(intervalSec: 60, distancePx: 30, keepAwake: true)
-        recording = try c.decodeIfPresent([RecordedEvent].self, forKey: .recording) ?? []
+        // Arrays decode lossily: a single corrupt element is dropped instead of
+        // failing the whole settings decode (which would reset everything).
+        recording = (try? c.decode(LossyArray<RecordedEvent>.self, forKey: .recording))?.elements ?? []
         recorder = try c.decodeIfPresent(RecorderConfig.self, forKey: .recorder) ?? RecorderConfig(repeat: .until, times: 5)
-        macros = try c.decodeIfPresent([Macro].self, forKey: .macros) ?? []
+        macros = (try? c.decode(LossyArray<Macro>.self, forKey: .macros))?.elements ?? []
         keyboard = try c.decodeIfPresent(KeyboardConfig.self, forKey: .keyboard) ?? KeyboardConfig(combo: "Space", intervalMs: 1000, repeat: .until, times: 50)
-        profiles = try c.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
+        profiles = (try? c.decode(LossyArray<Profile>.self, forKey: .profiles))?.elements ?? []
     }
 }
 
@@ -93,6 +122,9 @@ final class SettingsStore {
     private static let key = "fiddle.settings.v1"
     private let defaults: UserDefaults
     private(set) var settings: Settings
+    /// True when the saved blob could not be decoded and defaults were used.
+    /// The controller surfaces this to the user once, then acknowledges it.
+    private(set) var didResetToDefaults = false
     private let log = Logger(subsystem: "edu.umontana.fiddle", category: "settings")
 
     init(defaults: UserDefaults = .standard) {
@@ -102,6 +134,7 @@ final class SettingsStore {
                 self.settings = try JSONDecoder().decode(Settings.self, from: data)
             } catch {
                 self.settings = .default
+                self.didResetToDefaults = true
                 log.error("settings decode failed, falling back to defaults: \(String(describing: error), privacy: .public)")
                 defaults.set(data, forKey: Self.key + ".backup")
             }
@@ -109,6 +142,8 @@ final class SettingsStore {
             self.settings = .default
         }
     }
+
+    func acknowledgeReset() { didResetToDefaults = false }
 
     func setClicker(_ config: ClickerConfig) {
         settings.clicker = config
