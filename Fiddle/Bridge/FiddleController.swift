@@ -42,6 +42,11 @@ final class FiddleController {
         for entry in sinks where entry.sink !== excluded { entry.sink?.emit(event) }
     }
 
+    /// Deliver to one sink when known, otherwise to everyone.
+    private func send(_ event: Event, to sink: EngineEventSink?) {
+        if let sink { sink.emit(event) } else { broadcast(event) }
+    }
+
     let store: SettingsStore
     private let permissions = PermissionsManager()
     private let clickEngine = ClickEngine()
@@ -100,7 +105,7 @@ final class FiddleController {
 
     func handle(_ command: Command, from sink: EngineEventSink? = nil) {
         switch command {
-        case .ready:                          pushInitialState()
+        case .ready:                          pushInitialState(to: sink)
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
         case .start(let mode, let config):    start(mode: mode, config: config)
@@ -328,7 +333,7 @@ final class FiddleController {
     }
 
     /// Push the current bindings so the web keycaps reflect persisted state.
-    private func emitHotkeys() {
+    private func emitHotkeys(to sink: EngineEventSink? = nil) {
         let actions: [HotkeyAction] = [.startStop, .toggleJiggler, .pickPosition, .panic]
         var bindings: [String: String] = [:]
         for action in actions {
@@ -337,7 +342,7 @@ final class FiddleController {
                 bindings[action.rawValue] = token
             }
         }
-        broadcast(.hotkeys(bindings: bindings))
+        send(.hotkeys(bindings: bindings), to: sink)
     }
 
     private func hotkeyStartStop() {
@@ -387,11 +392,11 @@ final class FiddleController {
 
     // MARK: - Permissions
 
-    private func emitPermissions() {
-        broadcast(.permissions(
+    private func emitPermissions(to sink: EngineEventSink? = nil) {
+        send(.permissions(
             accessibility: permissions.accessibilityTrusted(),
             inputMonitoring: permissions.inputMonitoringGranted()
-        ))
+        ), to: sink)
     }
 
     /// Re-poll permission state and update the UI. Called when the app regains
@@ -417,19 +422,21 @@ final class FiddleController {
 
     // MARK: - Settings
 
-    private func pushInitialState() {
-        broadcast(.config(mode: .clicker, config: .clicker(store.settings.clicker)))
-        broadcast(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)))
-        broadcast(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)))
-        broadcast(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)))
-        broadcast(.config(mode: .recorder, config: .recorder(store.settings.recorder)))
-        broadcast(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)))
-        emitPermissions()
-        broadcast(prefsEvent())
-        emitHotkeys()
-        emitRecording()
-        emitMacros()
-        emitProfiles()
+    /// Push the full saved state. Scoped to the surface whose `ready` asked for
+    /// it; one surface booting must not re-render (and re-fit) the other.
+    private func pushInitialState(to sink: EngineEventSink? = nil) {
+        send(.config(mode: .clicker, config: .clicker(store.settings.clicker)), to: sink)
+        send(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)), to: sink)
+        send(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)), to: sink)
+        send(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)), to: sink)
+        send(.config(mode: .recorder, config: .recorder(store.settings.recorder)), to: sink)
+        send(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)), to: sink)
+        emitPermissions(to: sink)
+        send(prefsEvent(), to: sink)
+        emitHotkeys(to: sink)
+        emitRecording(to: sink)
+        emitMacros(to: sink)
+        emitProfiles(to: sink)
     }
 
     /// Persist a config edit. Returns false when the (mode, config) shapes do
@@ -515,8 +522,8 @@ final class FiddleController {
         emitRecording()
     }
 
-    private func emitRecording() {
-        broadcast(.recording(active: false, steps: RecordedSequence.displaySteps(store.settings.recording)))
+    private func emitRecording(to sink: EngineEventSink? = nil) {
+        send(.recording(active: false, steps: RecordedSequence.displaySteps(store.settings.recording)), to: sink)
     }
 
     // MARK: - Macros
@@ -526,8 +533,8 @@ final class FiddleController {
         emitMacros()
     }
 
-    private func emitMacros() {
-        broadcast(.macros(list: store.settings.macros))
+    private func emitMacros(to sink: EngineEventSink? = nil) {
+        send(.macros(list: store.settings.macros), to: sink)
     }
 
     // MARK: - Profiles
@@ -537,8 +544,8 @@ final class FiddleController {
         emitProfiles()
     }
 
-    private func emitProfiles() {
-        broadcast(.profiles(list: store.settings.profiles))
+    private func emitProfiles(to sink: EngineEventSink? = nil) {
+        send(.profiles(list: store.settings.profiles), to: sink)
     }
 
     private func applyProfile(_ id: String) {
