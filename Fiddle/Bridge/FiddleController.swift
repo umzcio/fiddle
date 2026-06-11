@@ -634,15 +634,24 @@ final class FiddleController {
         return points.allSatisfy { point in quartzFrames.contains { $0.contains(point) } }
     }
 
-    /// Best-effort: is the Quartz point inside one of fiddle's own windows?
+    /// Is the Quartz point over one of fiddle's own windows, z-order aware?
     /// Used to drop the user's own Record/Stop clicks from the recording.
+    /// Pure frame containment would also exclude clicks on OTHER apps'
+    /// windows stacked in front of fiddle's, silently losing recorded steps,
+    /// so the topmost on-screen window at the point decides.
     private func pointInsideAppWindow(_ point: CGPoint) -> Bool {
-        guard let primary = NSScreen.screens.first else { return false }
-        let maxY = primary.frame.maxY
-        for window in NSApp.windows where window.isVisible {
-            let f = window.frame   // AppKit, bottom-left origin
-            let quartz = CGRect(x: f.minX, y: maxY - f.maxY, width: f.width, height: f.height)
-            if quartz.contains(point) { return true }
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        let myPid = pid_t(ProcessInfo.processInfo.processIdentifier)
+        for info in list {   // front-to-back order; bounds are Quartz global
+            guard
+                let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+                let bounds = CGRect(dictionaryRepresentation: boundsDict),
+                (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                bounds.contains(point)
+            else { continue }
+            return (info[kCGWindowOwnerPID as String] as? pid_t) == myPid
         }
         return false
     }
