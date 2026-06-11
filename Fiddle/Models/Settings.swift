@@ -10,24 +10,26 @@
 import Foundation
 import os
 
+// Note: launch-at-login is intentionally NOT stored here. SMAppService owns
+// that state (the user can change it in System Settings behind our back), so
+// the UI always reads LoginItem.isEnabled live; a stored copy only drifts.
 struct AppPrefs: Codable, Equatable {
-    var launchAtLogin: Bool
     var menuBarOnly: Bool
     var soundOnClick: Bool
     var skin: String
     var device: String
     var interfaceMode: String
 
-    static let `default` = AppPrefs(launchAtLogin: false, menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced")
+    static let `default` = AppPrefs(menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced")
 }
 
 extension AppPrefs {
-    private enum CodingKeys: String, CodingKey { case launchAtLogin, menuBarOnly, soundOnClick, skin, device, interfaceMode }
+    private enum CodingKeys: String, CodingKey { case menuBarOnly, soundOnClick, skin, device, interfaceMode }
 
     // Tolerate prefs saved before `skin`, `device`, or `interfaceMode` existed.
+    // Older blobs also contain a `launchAtLogin` key; it is simply ignored.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         menuBarOnly   = try c.decodeIfPresent(Bool.self, forKey: .menuBarOnly) ?? false
         soundOnClick  = try c.decodeIfPresent(Bool.self, forKey: .soundOnClick) ?? false
         skin          = try c.decodeIfPresent(String.self, forKey: .skin) ?? "red"
@@ -126,7 +128,6 @@ final class SettingsStore {
 
     func setPref(_ key: String, _ value: PrefValue) {
         switch (key, value) {
-        case ("launchAtLogin", .bool(let b)): settings.prefs.launchAtLogin = b
         case ("menuBarOnly", .bool(let b)):   settings.prefs.menuBarOnly = b
         case ("soundOnClick", .bool(let b)):  settings.prefs.soundOnClick = b
         case ("skin", .string(let s)):           settings.prefs.skin = s

@@ -130,7 +130,17 @@ final class FiddleController {
     private func applyPref(key: String, value: PrefValue) {
         store.setPref(key, value)
         switch (key, value) {
-        case ("launchAtLogin", .bool(let b)): LoginItem.setEnabled(b)
+        case ("launchAtLogin", .bool(let b)):
+            if !LoginItem.setEnabled(b) {
+                if b && LoginItem.requiresApproval {
+                    broadcast(.error(message: "macOS needs your approval: enable fiddle under Login Items in System Settings."))
+                    LoginItem.openSystemSettings()
+                } else {
+                    broadcast(.error(message: "The login item could not be \(b ? "enabled" : "disabled")."))
+                }
+                // Correct every surface's toggle, including the sender's.
+                broadcast(prefsEvent())
+            }
         case ("menuBarOnly", .bool(let b)):   NSApp.setActivationPolicy(b ? .accessory : .regular)
         case ("soundOnClick", _):             updateClickSoundHook()
         case ("skin", .string(let s)):        menuState?.skin = s

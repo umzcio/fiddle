@@ -46,7 +46,6 @@ final class SettingsTests: XCTestCase {
 
     func testDefaultPrefsAreOff() {
         let p = Settings.default.prefs
-        XCTAssertFalse(p.launchAtLogin)
         XCTAssertFalse(p.menuBarOnly)
         XCTAssertFalse(p.soundOnClick)
     }
@@ -78,12 +77,10 @@ final class SettingsTests: XCTestCase {
         let store = SettingsStore(defaults: defaults)
         store.setPref("soundOnClick", .bool(true))
         store.setPref("menuBarOnly", .bool(true))
-        store.setPref("launchAtLogin", .bool(false))
 
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertTrue(reloaded.settings.prefs.soundOnClick)
         XCTAssertTrue(reloaded.settings.prefs.menuBarOnly)
-        XCTAssertFalse(reloaded.settings.prefs.launchAtLogin)
     }
 
     @MainActor
