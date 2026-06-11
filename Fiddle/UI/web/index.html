@@ -1209,8 +1209,9 @@
     send({type:'setHotkey', action, combo:[...mods, code].join('+')});
   }
   function resetHotkeys(){
-    const defs={startStop:'F6', toggleJiggler:'F7', pickPosition:'ctrl+opt+KeyP', panic:'cmd+Escape'};
-    Object.keys(defs).forEach(a=>send({type:'setHotkey', action:a, combo:defs[a]}));
+    // Defaults live with HotkeyManager in Swift; the controller echoes the
+    // restored bindings back via the hotkeys event.
+    send({type:'resetHotkeys'});
   }
 
   function viewMore(){

@@ -157,6 +157,9 @@ enum Command: Equatable {
     case updateConfig(mode: AutomationMode, config: Config)
     case pickPosition(purpose: String?)
     case setHotkey(action: HotkeyAction, combo: String)
+    /// Restore every hotkey binding to its default. The defaults live with
+    /// HotkeyManager (the single source of truth), not in the web layer.
+    case resetHotkeys
     case setPref(key: String, value: PrefValue)
     case checkPermissions
     case openSettings(pane: SettingsPane)
@@ -216,6 +219,7 @@ extension Command: Decodable {
         case "recordStart":      self = .recordStart
         case "recordStop":       self = .recordStop
         case "clearRecording":   self = .clearRecording
+        case "resetHotkeys":     self = .resetHotkeys
 
         default:
             throw DecodingError.dataCorruptedError(

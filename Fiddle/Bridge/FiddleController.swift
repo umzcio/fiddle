@@ -120,6 +120,9 @@ final class FiddleController {
             }
         case .pickPosition(let purpose):      beginPick(purpose: purpose)
         case .setHotkey(let action, let combo): setHotkey(action: action, combo: combo)
+        case .resetHotkeys:
+            hotkeys.resetToDefaults()
+            emitHotkeys()
         case .setPref(let key, let value):
             applyPref(key: key, value: value)
             broadcast(prefsEvent(), excluding: sink)
