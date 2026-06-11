@@ -186,6 +186,11 @@ final class FiddleController {
                 return
             }
             guard case .clicker(let clickerConfig) = config else { return }
+            if clickerConfig.position == .fixed,
+               !Self.pointsWithinDisplays([CGPoint(x: clickerConfig.x, y: clickerConfig.y)]) {
+                broadcast(.error(message: "The saved fixed position is outside the connected displays. Pick it again."))
+                return
+            }
             clickEngine.start(config: clickerConfig)
             lastMode = .clicker
             setStatus(.running)
@@ -222,6 +227,10 @@ final class FiddleController {
                 broadcast(.error(message: "Record some clicks before playing."))
                 return
             }
+            guard Self.pointsWithinDisplays(events.map { CGPoint(x: $0.x, y: $0.y) }) else {
+                broadcast(.error(message: "This recording was made on a different display arrangement. Record it again."))
+                return
+            }
             playbackEngine.start(events: events, config: recorderConfig)
             lastMode = .recorder
             setStatus(.running)
@@ -239,6 +248,10 @@ final class FiddleController {
             let events = MacroCompiler.compile(macro.steps)
             guard !events.isEmpty else {
                 broadcast(.error(message: "That macro has no steps to play."))
+                return
+            }
+            guard Self.pointsWithinDisplays(events.map { CGPoint(x: $0.x, y: $0.y) }) else {
+                broadcast(.error(message: "That macro clicks outside the connected displays."))
                 return
             }
             playbackEngine.start(events: events, config: RecorderConfig(repeat: macroConfig.repeat, times: macroConfig.times))
@@ -588,6 +601,23 @@ final class FiddleController {
         case .macro:    return "Macro"
         case .keyboard: return "Auto Presser"
         }
+    }
+
+    /// Whether every Quartz-global point lands on a connected display. Posting
+    /// an off-screen point gets pinned to a display edge by the WindowServer
+    /// and clicks whatever UI lives there, so stale multi-display recordings
+    /// and fixed positions are refused instead.
+    private static func pointsWithinDisplays(_ points: [CGPoint]) -> Bool {
+        guard let primary = NSScreen.screens.first else { return false }
+        let maxY = primary.frame.maxY
+        // AppKit frames are bottom-left global; flip to Quartz top-left. The
+        // 1pt outset tolerates cursor coordinates rounded onto the edge.
+        let quartzFrames = NSScreen.screens.map { screen in
+            CGRect(x: screen.frame.minX, y: maxY - screen.frame.maxY,
+                   width: screen.frame.width, height: screen.frame.height)
+                .insetBy(dx: -1, dy: -1)
+        }
+        return points.allSatisfy { point in quartzFrames.contains { $0.contains(point) } }
     }
 
     /// Best-effort: is the Quartz point inside one of fiddle's own windows?
