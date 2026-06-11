@@ -212,6 +212,9 @@ final class FiddleController {
     }
 
     private func stopAll() {
+        // The recorder's tap is not an "engine", but stop and panic must halt
+        // it too; otherwise the system-wide tap keeps capturing after a panic.
+        if clickRecorder.isRecording { endRecording() }
         stopEngines()
         setStatus(.idle)
     }
