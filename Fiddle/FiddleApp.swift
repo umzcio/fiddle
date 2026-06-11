@@ -35,7 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wc = MainWindowController(controller: controller)
         wc.onCheckForUpdates = { [weak self] in self?.checkForUpdates() }
         mainWindowController = wc
-        wc.show()
+        // Menu-bar-only means exactly that: no main window thrown up at every
+        // launch (or login). The menu-bar popover's "Open fiddle" and app
+        // reopen still summon it.
+        if !controller.store.settings.prefs.menuBarOnly {
+            wc.show()
+        }
     }
 
     /// Triggered by the About overlay's "Check for Updates" button.
