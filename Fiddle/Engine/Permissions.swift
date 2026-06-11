@@ -3,8 +3,8 @@
 //  Fiddle
 //
 //  Accessibility is required to synthesize mouse events; nothing in the engine
-//  works without it. Input Monitoring is only needed by the Phase 2 recorder
-//  but is reported here so the UI can show a complete picture.
+//  works without it. Input Monitoring is needed by the Click Recorder and the
+//  Position Picker; both states are reported so the UI shows a complete picture.
 //
 
 import AppKit

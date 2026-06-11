@@ -435,24 +435,3 @@ enum Bridge {
         return "\(eventFunction)(\(json))"
     }
 }
-
-//
-//  Example wiring (for reference; real code lives in Bridge.swift):
-//
-//  final class FiddleBridge: NSObject, WKScriptMessageHandler {
-//      func userContentController(_ ucc: WKUserContentController,
-//                                 didReceive message: WKScriptMessage) {
-//          do {
-//              let command = try Bridge.decodeCommand(from: message.body)
-//              route(command)            // hand off to the engine
-//          } catch {
-//              emit(.error(message: "Bad command: \(error)"))
-//          }
-//      }
-//
-//      func emit(_ event: Event) {
-//          guard let js = try? Bridge.script(for: event) else { return }
-//          Task { @MainActor in webView.evaluateJavaScript(js) }
-//      }
-//  }
-//
