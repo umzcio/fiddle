@@ -78,6 +78,9 @@ final class JiggleEngine {
     // user genuinely last acted versus when we last moved the cursor.
     private var lastSyntheticUptime: TimeInterval = 0
     private var lastUserActivityUptime: TimeInterval = 0
+    /// Run identity (accessed on `queue`): a zen restore queued by one run
+    /// must not fire into a run that replaced it within the 40ms window.
+    private var runGeneration: UInt64 = 0
 
     init(mover: CursorMoving = CGCursorMover()) {
         self.mover = mover
@@ -91,6 +94,7 @@ final class JiggleEngine {
             self.direction = 1
             self.lastSyntheticUptime = 0
             self.lastUserActivityUptime = ProcessInfo.processInfo.systemUptime - IdleMonitor.secondsSinceLastInput()
+            self.runGeneration &+= 1
         }
         if config.keepAwake { power.acquire() }
         let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -129,8 +133,14 @@ final class JiggleEngine {
         lastSyntheticUptime = ProcessInfo.processInfo.systemUptime
 
         if let restore {
+            let myGeneration = runGeneration
             queue.asyncAfter(deadline: .now() + .milliseconds(40)) { [weak self] in
-                guard let self, self.config != nil else { return }
+                guard let self, self.config != nil, self.runGeneration == myGeneration else { return }
+                // Only warp back if the cursor is still where we nudged it; if
+                // the user started moving, restoring would yank the pointer
+                // out from under them.
+                let current = self.mover.location()
+                guard abs(current.x - move.x) < 2, abs(current.y - move.y) < 2 else { return }
                 self.mover.move(to: restore)
                 self.lastSyntheticUptime = ProcessInfo.processInfo.systemUptime
             }
