@@ -95,9 +95,9 @@ final class FiddleController {
 
     private func updateClickSoundHook() {
         if store.settings.prefs.soundOnClick {
-            clickEngine.onClick = { [weak self] in self?.clickSound.play() }
+            clickEngine.setOnClick { [weak self] in self?.clickSound.play() }
         } else {
-            clickEngine.onClick = nil
+            clickEngine.setOnClick(nil)
         }
     }
 

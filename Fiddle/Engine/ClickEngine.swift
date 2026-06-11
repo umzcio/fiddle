@@ -123,8 +123,13 @@ final class ClickEngine {
 
     /// Called on the main actor after each click is posted, when set. The
     /// controller wires this to the click sound only while the pref is on, so a
-    /// disabled sound costs zero per-click work.
-    var onClick: (@MainActor () -> Void)?
+    /// disabled sound costs zero per-click work. Read by fire() on `queue`, so
+    /// writes must hop onto the queue too (the pref can toggle mid-run).
+    private var onClick: (@MainActor () -> Void)?
+
+    func setOnClick(_ handler: (@MainActor () -> Void)?) {
+        queue.sync { self.onClick = handler }
+    }
 
     init(poster: MouseEventPosting = CGEventMousePoster()) {
         self.poster = poster
