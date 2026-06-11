@@ -178,6 +178,11 @@ final class FiddleController {
             setStatus(.running)
         case .wakeLock:
             guard case .wakeLock(let wl) = config else { return }
+            // Both toggles off would show Running while holding no assertion.
+            guard wl.keepDisplayAwake || wl.keepSystemAwake else {
+                broadcast(.error(message: "Turn on at least one wake option first."))
+                return
+            }
             wakeLockEngine.start(config: wl)
             lastMode = .wakeLock
             setStatus(.running)
