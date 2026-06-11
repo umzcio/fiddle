@@ -26,6 +26,14 @@ enum JiggleMath {
         let move = CGPoint(x: origin.x + CGFloat(dx), y: origin.y)
         return (move, zen ? origin : nil)
     }
+
+    /// Whether the most recent input event was real user activity rather than
+    /// this engine's own posted nudge. Our nudges reset the system idle clock,
+    /// so the reading roughly equals the time since our last synthetic move
+    /// when nothing else happened; a genuinely newer user event reads lower.
+    static func isRealUserInput(systemIdle: TimeInterval, sinceLastSynthetic: TimeInterval, tolerance: TimeInterval = 0.5) -> Bool {
+        systemIdle < sinceLastSynthetic - tolerance
+    }
 }
 
 // MARK: - Cursor seam
@@ -36,14 +44,22 @@ protocol CursorMoving {
 }
 
 struct CGCursorMover: CursorMoving {
+    private let source = CGEventSource(stateID: .combinedSessionState)
+
     func location() -> CGPoint {
         CGEvent(source: nil)?.location ?? .zero
     }
 
     func move(to point: CGPoint) {
-        CGWarpMouseCursorPosition(point)
-        // Re-associate so the next physical mouse move is not snapped back.
-        CGAssociateMouseAndMouseCursorPosition(1)
+        // Post a real mouse-moved event instead of CGWarpMouseCursorPosition:
+        // a warp generates no events, so it neither resets the system idle
+        // timer (the jiggler's whole purpose with keepAwake off) nor looks
+        // like input to apps that watch events. Tagged so fiddle's own taps
+        // can ignore it.
+        if let event = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            event.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
+            event.post(tap: .cghidEventTap)
+        }
     }
 }
 
@@ -57,6 +73,11 @@ final class JiggleEngine {
     private var config: JigglerConfig?
     private var direction = 1
     private let idleThreshold: TimeInterval = 3
+    // Idle-only bookkeeping (accessed on `queue`). Our nudges are real posted
+    // events now, so they reset the system idle clock; these track when the
+    // user genuinely last acted versus when we last moved the cursor.
+    private var lastSyntheticUptime: TimeInterval = 0
+    private var lastUserActivityUptime: TimeInterval = 0
 
     init(mover: CursorMoving = CGCursorMover()) {
         self.mover = mover
@@ -68,6 +89,8 @@ final class JiggleEngine {
         queue.sync {
             self.config = config
             self.direction = 1
+            self.lastSyntheticUptime = 0
+            self.lastUserActivityUptime = ProcessInfo.processInfo.systemUptime - IdleMonitor.secondsSinceLastInput()
         }
         if config.keepAwake { power.acquire() }
         let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -89,18 +112,27 @@ final class JiggleEngine {
     /// Runs on `queue`.
     private func fire() {
         guard let config else { return }
-        let idle = IdleMonitor.secondsSinceLastInput()
-        guard JiggleMath.shouldJiggle(idleOnly: config.idleOnly, secondsSinceInput: idle, threshold: idleThreshold) else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let systemIdle = IdleMonitor.secondsSinceLastInput()
+        // Only count input newer than our own last nudge as user activity, so
+        // posting real move events does not make idle-only self-defeating.
+        if lastSyntheticUptime == 0 || JiggleMath.isRealUserInput(systemIdle: systemIdle, sinceLastSynthetic: now - lastSyntheticUptime) {
+            lastUserActivityUptime = now - systemIdle
+        }
+        let userIdle = now - lastUserActivityUptime
+        guard JiggleMath.shouldJiggle(idleOnly: config.idleOnly, secondsSinceInput: userIdle, threshold: idleThreshold) else { return }
 
         let origin = mover.location()
         let dx = direction * config.distancePx
         let (move, restore) = JiggleMath.nudge(from: origin, dx: dx, zen: config.mode == .zen)
         mover.move(to: move)
+        lastSyntheticUptime = ProcessInfo.processInfo.systemUptime
 
         if let restore {
             queue.asyncAfter(deadline: .now() + .milliseconds(40)) { [weak self] in
                 guard let self, self.config != nil else { return }
                 self.mover.move(to: restore)
+                self.lastSyntheticUptime = ProcessInfo.processInfo.systemUptime
             }
         } else {
             direction *= -1   // visible: bounce so the cursor stays in place over time
