@@ -39,6 +39,49 @@ final class PlaybackEngineTests: XCTestCase {
         XCTAssertEqual(poster.posts.last?.button, .left)
     }
 
+    // Restarting playback must invalidate the previous worker: the old run's
+    // events may not keep posting alongside the new run's.
+    func testRestartInvalidatesOldWorker() {
+        let poster = RecordingPoster()
+        let engine = PlaybackEngine(poster: poster)
+        // Run A would post nothing for 10s, then a right-click.
+        let slow = [RecordedEvent(kind: .down, button: .right, x: 0, y: 0, delayMs: 10_000)]
+        // Run B posts a left pair immediately.
+        let fast = [
+            RecordedEvent(kind: .down, button: .left, x: 1, y: 1, delayMs: 0),
+            RecordedEvent(kind: .up, button: .left, x: 1, y: 1, delayMs: 0),
+        ]
+        engine.start(events: slow, config: RecorderConfig(repeat: .until, times: 1))
+        engine.start(events: fast, config: RecorderConfig(repeat: .times, times: 1))
+        waitUntil { poster.posts.count >= 2 }
+        Thread.sleep(forTimeInterval: 0.2)
+        // Only run B's pair; run A's stale worker posted nothing.
+        XCTAssertEqual(poster.posts.count, 2)
+        XCTAssertTrue(poster.posts.allSatisfy { $0.button == .left })
+    }
+
+    // An old worker finishing naturally must not tear down the run that
+    // replaced it (the dead-run half of the restart race).
+    func testOldWorkerCompletionDoesNotKillNewRun() {
+        let poster = RecordingPoster()
+        let engine = PlaybackEngine(poster: poster)
+        let quick = [
+            RecordedEvent(kind: .down, button: .right, x: 0, y: 0, delayMs: 0),
+            RecordedEvent(kind: .up, button: .right, x: 0, y: 0, delayMs: 0),
+        ]
+        let looping = [
+            RecordedEvent(kind: .down, button: .left, x: 1, y: 1, delayMs: 20),
+            RecordedEvent(kind: .up, button: .left, x: 1, y: 1, delayMs: 0),
+        ]
+        engine.start(events: quick, config: RecorderConfig(repeat: .times, times: 1))
+        engine.start(events: looping, config: RecorderConfig(repeat: .until, times: 1))
+        // If the old worker's cleanup killed the new run, the left pair would
+        // stop repeating almost immediately.
+        waitUntil { poster.posts.filter { $0.button == .left }.count >= 6 }
+        XCTAssertGreaterThanOrEqual(poster.posts.filter { $0.button == .left }.count, 6)
+        engine.stop()
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() && Date() < deadline {

@@ -60,6 +60,10 @@ final class PlaybackEngine {
     private var events: [RecordedEvent] = []
     private var runState: PlaybackRunState?
     private var running = false
+    /// Run identity. Bumped on every start; a worker only acts while its own
+    /// generation is current, so a stale worker can neither keep playing after
+    /// a restart nor tear down the run that replaced it.
+    private var generation: UInt64 = 0
 
     /// Called on the main actor only when a run completes on its own.
     var onFinished: (@MainActor () -> Void)?
@@ -78,9 +82,11 @@ final class PlaybackEngine {
         self.events = events
         self.runState = PlaybackRunState(config: config)
         self.running = true
+        self.generation &+= 1
+        let myGeneration = generation
         lock.unlock()
 
-        let worker = Thread { [weak self] in self?.playLoop() }
+        let worker = Thread { [weak self] in self?.playLoop(myGeneration: myGeneration) }
         worker.qualityOfService = .userInitiated
         worker.start()
     }
@@ -92,12 +98,12 @@ final class PlaybackEngine {
         lock.unlock()
     }
 
-    private func isRunning() -> Bool {
+    private func isRunning(_ myGeneration: UInt64) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return running
+        return running && generation == myGeneration
     }
 
-    private func playLoop() {
+    private func playLoop(myGeneration: UInt64) {
         var completed = false
         // Downs posted without their matching up yet. Released on every exit,
         // so a stop or panic mid-pair cannot leave a button logically pressed.
@@ -107,19 +113,19 @@ final class PlaybackEngine {
                 poster.post(button: button, down: false, at: point)
             }
         }
-        while isRunning() {
+        while isRunning(myGeneration) {
             let snapshot: [RecordedEvent] = { lock.lock(); defer { lock.unlock() }; return events }()
             for event in snapshot {
                 if event.delayMs > 0 {
                     var remaining = event.delayMs
                     while remaining > 0 {
-                        if !isRunning() { return }
+                        if !isRunning(myGeneration) { return }
                         let slice = min(remaining, 25)
                         Thread.sleep(forTimeInterval: Double(slice) / 1000.0)
                         remaining -= slice
                     }
                 }
-                if !isRunning() { return }   // external stop: no onFinished
+                if !isRunning(myGeneration) { return }   // external stop: no onFinished
                 let point = CGPoint(x: event.x, y: event.y)
                 if event.kind == .move {
                     poster.move(to: point)
@@ -133,16 +139,25 @@ final class PlaybackEngine {
                     }
                 }
             }
-            let again: Bool = {
-                lock.lock(); defer { lock.unlock() }
-                guard running, var state = runState else { return false }
-                let cont = state.finishPass()
+            lock.lock()
+            let stale = !(running && generation == myGeneration)
+            var again = false
+            if !stale, var state = runState {
+                again = state.finishPass()
                 runState = state
-                return cont
-            }()
+            }
+            lock.unlock()
+            if stale { return }   // a newer run owns the engine now
             if !again { completed = true; break }
         }
-        lock.lock(); running = false; runState = nil; lock.unlock()
-        if completed, let onFinished { Task { @MainActor in onFinished() } }
+        lock.lock()
+        // Only tear down state that still belongs to this run.
+        if generation == myGeneration {
+            running = false
+            runState = nil
+        }
+        let notify = completed && generation == myGeneration
+        lock.unlock()
+        if notify, let onFinished { Task { @MainActor in onFinished() } }
     }
 }
