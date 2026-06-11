@@ -51,6 +51,51 @@ Severity definitions: **Critical** = security issue, stuck input/power state (le
 | m30 | Chevron orbs styled clickable, never wired | Minor | FIXED | 710e4e8 |
 | m31 | Stale scaffold comments | Minor | FIXED | 5dc1494 |
 
+## Remediation Summary (2026-06-10, branch `code-review-fixes`)
+
+**Counts** (42 tracked rows; the original summary undercounted the minors it listed):
+
+| Severity | Fixed | Disputed | Deferred |
+|---|---|---|---|
+| Critical | 3 | 0 | 0 |
+| Major | 8 | 0 | 0 |
+| Minor | 26 | 0 | 5 |
+| **Total** | **37** | **0** | **5** |
+
+36 fix commits (M7 and m11 shared one root cause and one commit). Every commit was gated on a green `xcodebuild ... test` run; an independent verification agent then re-read every diff against its finding's original failure scenario, confirmed all 37 fixes and all 5 deferral rationales, and did a clean build plus full test run from scratch: **BUILD SUCCEEDED**, **TEST SUCCEEDED**, zero failures.
+
+**Manual verification checklist** (untestable surfaces; run on a real machine):
+
+- [ ] **C2/M3**: arm Record, press the start/stop hotkey. The recording ends saved, and the clicker's synthesized clicks do not appear as recorded steps.
+- [ ] **C1**: play a recording with spaced down/up pairs, hit Cmd+Escape mid-pair. No stuck mouse button afterward (next single click behaves normally).
+- [ ] **C3**: try to rebind Start/Stop to cmd+Escape. fiddle refuses with "already bound to Panic" and the keycap reverts.
+- [ ] **M4**: jiggler with keep-awake OFF and display sleep at 1 minute keeps the display awake. Idle-only zen jiggle at a 1s interval keeps jiggling while away, pauses while typing.
+- [ ] **M5/m16**: grant Input Monitoring mid-session without relaunching, press Record (and Pick position). Each shows the relaunch error instead of a fake active state or a silent hang.
+- [ ] **M6**: change the click rate in the popover, then START from the main window. The engine runs the new rate and the main window form shows it.
+- [ ] **M7**: with the jiggler running and Accessibility revoked, press START on the clicker. The LED returns to Idle and the next hotkey press starts instead of no-op stopping.
+- [ ] **M8**: set the keyboard interval to 5s, press the start hotkey without clicking START; the presser runs at 5s. Set recorder repeat Times/3, relaunch; the form still shows it.
+- [ ] **m1**: a marathon recording auto-stops with the 10,000-step message.
+- [ ] **m4**: toggle launch-at-login where macOS requires approval; fiddle opens Login Items, explains, and the toggle reflects reality.
+- [ ] **m5**: revoke Accessibility while the clicker runs, refocus fiddle; automation stops with the revocation message.
+- [ ] **m6**: apply a profile named `<b>x</b>`; the activity log shows the tags as literal text.
+- [ ] **m7**: drag the window to a corner, open the popover for the first time; the window does not move. Switch Simple/Advanced; it resizes in place.
+- [ ] **m10**: zen jiggle at a 1s interval while wiggling the mouse; the pointer is never snapped backward.
+- [ ] **m12**: record on an external display, unplug it, press play; fiddle refuses with the display-arrangement message.
+- [ ] **m14**: enable menu-bar-only, relaunch; no window appears, and the popover's "Open fiddle" summons it.
+- [ ] **m17**: with another app's window in front of fiddle, record a click on it inside the overlap; the step is captured.
+- [ ] **m19 (+ FOLLOWUP)**: click the dock save orb; confirm the name prompt actually appears (see the FOLLOWUP.md note about WKWebView suppressing `prompt()` — pre-existing suspicion to confirm).
+
+**FOLLOWUP.md contents in brief**: five deferred findings with design sketches — m18 drag recording (feature work, interacts with the m1 cap), m24 Anti-AFK delegating to JiggleEngine, m25 generic repeating-timer engine, m26 shared listen-only-tap helper, m27 JS capture unification (deliberately divergent after m3) — plus three adjacent issues spotted but untouched: the WKWebView `prompt()` suppression on the profile-save flow, the PositionPicker not filtering fiddle's own synthesized clicks, and the recording's residence inside the settings blob.
+
+**Review the work**:
+
+```
+git log --oneline main..code-review-fixes
+git diff main...code-review-fixes --stat
+```
+
+Branch not merged; awaiting human review.
+
 ## Summary
 
 | Category | Critical | Major | Minor | Total |

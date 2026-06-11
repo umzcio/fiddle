@@ -51,6 +51,15 @@ surgery but outside the findings being fixed.
 
 ## Adjacent issues spotted (not in the review findings)
 
+- **JS `prompt()` likely never works in the skin (profile naming).** Flagged
+  by the post-remediation verifier: no `WKUIDelegate` in the codebase
+  implements `runJavaScriptTextInputPanelWithPrompt`, and WKWebView
+  suppresses `prompt()` by default. The profile-save flow (Profiles view
+  button, and the dock orb wired by m19) calls `prompt('Profile name', ...)`
+  and would silently get null. Pre-existing, not introduced by this branch.
+  Fix options: implement the UIDelegate text-input panel on both bridges, or
+  replace the prompt with an in-DOM name field. Verify on a real run first.
+
 - **PositionPicker can capture fiddle's own synthesized click as the pick.**
   While fixing M3, the recorder tap gained a synthetic-event filter
   (`SyntheticEvents.userDataTag`), but `PositionPicker`'s tap does not check
