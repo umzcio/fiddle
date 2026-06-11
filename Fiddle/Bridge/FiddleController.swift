@@ -391,6 +391,14 @@ final class FiddleController {
         }
         pickPurpose = purpose
         picker.begin()
+        // Tap creation can fail (permission granted mid-session takes effect
+        // at relaunch); the form is already waiting for positionPicked, so
+        // never leave it hanging silently.
+        guard picker.isPicking else {
+            pickPurpose = nil
+            broadcast(.error(message: "Position picking could not start. If you just changed permissions, quit and relaunch fiddle."))
+            return
+        }
     }
 
     private func handlePicked(x: Int, y: Int) {
