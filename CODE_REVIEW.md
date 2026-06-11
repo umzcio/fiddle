@@ -8,48 +8,48 @@ Severity definitions: **Critical** = security issue, stuck input/power state (le
 
 | ID | Title | Severity | Status | Commit |
 |---|---|---|---|---|
-| C1 | Stop mid-playback leaves synthesized button stuck down | Critical | PENDING | |
-| C2 | Panic/stopAll never stop the recorder tap | Critical | PENDING | |
-| C3 | No duplicate-combo guard in setHotkey | Critical | PENDING | |
-| M1 | PlaybackEngine restart race (no run identity) | Major | PENDING | |
-| M2 | Playback/macro double-clicks missing clickState | Major | PENDING | |
-| M3 | Recorder captures fiddle's own synthesized events | Major | PENDING | |
-| M4 | CGWarpMouseCursorPosition generates no events | Major | PENDING | |
-| M5 | beginRecording reports active when tap creation failed | Major | PENDING | |
-| M6 | updateConfig/setPref never rebroadcast (surface desync) | Major | PENDING | |
-| M7 | start() early returns leave status stuck Running | Major | PENDING | |
-| M8 | Four views never persist(); recorder config can never persist | Major | PENDING | |
-| m1 | Recording unbounded, lives in settings blob | Minor | PENDING | |
-| m2 | Wake Lock "Running" with zero assertions | Minor | PENDING | |
-| m3 | Modifier-less hotkeys accepted | Minor | PENDING | |
-| m4 | Login-item failures swallowed; dead pref field | Minor | PENDING | |
-| m5 | Engines keep "Running" after AX revocation | Minor | PENDING | |
-| m6 | Activity log unescaped innerHTML | Minor | PENDING | |
-| m7 | ready/applyProfile re-render + re-center main window | Minor | PENDING | |
-| m8 | ClickEngine.onClick unsynchronized | Minor | PENDING | |
-| m9 | Stale onFinished marks fresh run idle | Minor | PENDING | |
-| m10 | Zen restore warps to stale origin | Minor | PENDING | |
-| m11 | beginRecording stops playback without status update | Minor | PENDING | |
-| m12 | No screen-bounds validation on playback/fixed position | Minor | PENDING | |
-| m13 | Corrupt nested value silently resets all settings | Minor | PENDING | |
-| m14 | menuBarOnly: window still shown at launch | Minor | PENDING | |
-| m15 | applyProfile does six full blob writes | Minor | PENDING | |
-| m16 | Position picker tap failure swallowed | Minor | PENDING | |
-| m17 | pointInsideAppWindow lacks z-order check | Minor | PENDING | |
-| m18 | Recorder does not capture drags | Minor | PENDING | |
-| m19 | Dead "Save profile" dock orb | Minor | PENDING | |
-| m20 | WebContainerView unreferenced | Minor | PENDING | |
-| m21 | hotkeyTriggered event is a no-op | Minor | PENDING | |
-| m22 | Unused Logger properties | Minor | PENDING | |
-| m23 | PrefValue.encode unreachable | Minor | PENDING | |
-| m24 | AntiAFKEngine duplicates JiggleEngine | Minor | PENDING | |
-| m25 | ClickEngine/KeyEngine boilerplate duplication | Minor | PENDING | |
-| m26 | ClickRecorder/PositionPicker tap boilerplate duplication | Minor | PENDING | |
-| m27 | Duplicated JS key-capture logic | Minor | PENDING | |
-| m28 | Hotkey defaults defined in three places | Minor | PENDING | |
-| m29 | Undefined CSS var --font-body | Minor | PENDING | |
-| m30 | Chevron orbs styled clickable, never wired | Minor | PENDING | |
-| m31 | Stale scaffold comments | Minor | PENDING | |
+| C1 | Stop mid-playback leaves synthesized button stuck down | Critical | FIXED | dccc793 |
+| C2 | Panic/stopAll never stop the recorder tap | Critical | FIXED | b1e73cd |
+| C3 | No duplicate-combo guard in setHotkey | Critical | FIXED | 6b11cec |
+| M1 | PlaybackEngine restart race (no run identity) | Major | FIXED | 45f1cae |
+| M2 | Playback/macro double-clicks missing clickState | Major | FIXED | c4abaee |
+| M3 | Recorder captures fiddle's own synthesized events | Major | FIXED | d81376e |
+| M4 | CGWarpMouseCursorPosition generates no events | Major | FIXED | 764adc8 |
+| M5 | beginRecording reports active when tap creation failed | Major | FIXED | 81ec0b6 |
+| M6 | updateConfig/setPref never rebroadcast (surface desync) | Major | FIXED | 00b0cfc |
+| M7 | start() early returns leave status stuck Running | Major | FIXED | 8be3693 |
+| M8 | Four views never persist(); recorder config can never persist | Major | FIXED | 3bb730a |
+| m1 | Recording unbounded, lives in settings blob | Minor | FIXED (cap; storage move in FOLLOWUP) | a0da6c3 |
+| m2 | Wake Lock "Running" with zero assertions | Minor | FIXED | 255b445 |
+| m3 | Modifier-less hotkeys accepted | Minor | FIXED | 5239c19 |
+| m4 | Login-item failures swallowed; dead pref field | Minor | FIXED | ce1344d |
+| m5 | Engines keep "Running" after AX revocation | Minor | FIXED | 1dabee2 |
+| m6 | Activity log unescaped innerHTML | Minor | FIXED | 774b937 |
+| m7 | ready/applyProfile re-render + re-center main window | Minor | FIXED | 9570f92 |
+| m8 | ClickEngine.onClick unsynchronized | Minor | FIXED | ba9beb4 |
+| m9 | Stale onFinished marks fresh run idle | Minor | FIXED | e1a5d36 |
+| m10 | Zen restore warps to stale origin | Minor | FIXED | 9e2a46a |
+| m11 | beginRecording stops playback without status update | Minor | FIXED | 8be3693 |
+| m12 | No screen-bounds validation on playback/fixed position | Minor | FIXED | 1aae3e2 |
+| m13 | Corrupt nested value silently resets all settings | Minor | FIXED | d73d6c0 |
+| m14 | menuBarOnly: window still shown at launch | Minor | FIXED | de50930 |
+| m15 | applyProfile does six full blob writes | Minor | FIXED | 554f10f |
+| m16 | Position picker tap failure swallowed | Minor | FIXED | cbb8bfc |
+| m17 | pointInsideAppWindow lacks z-order check | Minor | FIXED | 00b5f69 |
+| m18 | Recorder does not capture drags | Minor | DEFERRED (feature work; sketch in FOLLOWUP.md) | |
+| m19 | Dead "Save profile" dock orb | Minor | FIXED | 3001441 |
+| m20 | WebContainerView unreferenced | Minor | FIXED | ef4f68f |
+| m21 | hotkeyTriggered event is a no-op | Minor | FIXED | a83d0cb |
+| m22 | Unused Logger properties | Minor | FIXED | 6ba1fa5 |
+| m23 | PrefValue.encode unreachable | Minor | FIXED | 675a5ba |
+| m24 | AntiAFKEngine duplicates JiggleEngine | Minor | DEFERRED (engine restructure; sketch in FOLLOWUP.md) | |
+| m25 | ClickEngine/KeyEngine boilerplate duplication | Minor | DEFERRED (engine restructure; sketch in FOLLOWUP.md) | |
+| m26 | ClickRecorder/PositionPicker tap boilerplate duplication | Minor | DEFERRED (C-callback lifetime refactor; sketch in FOLLOWUP.md) | |
+| m27 | Duplicated JS key-capture logic | Minor | DEFERRED (m3 made the flows deliberately divergent; FOLLOWUP.md) | |
+| m28 | Hotkey defaults defined in three places | Minor | FIXED | 737c7cd |
+| m29 | Undefined CSS var --font-body | Minor | FIXED | fa142e0 |
+| m30 | Chevron orbs styled clickable, never wired | Minor | FIXED | 710e4e8 |
+| m31 | Stale scaffold comments | Minor | FIXED | 5dc1494 |
 
 ## Summary
 
