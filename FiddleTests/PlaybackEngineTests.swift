@@ -98,7 +98,7 @@ final class RecordingPoster: SingleMouseEventPosting {
         lock.lock(); defer { lock.unlock() }
         return storage
     }
-    func post(button: MouseButton, down: Bool, at point: CGPoint) {
+    func post(button: MouseButton, down: Bool, at point: CGPoint, clickState: Int) {
         lock.lock(); storage.append((button, down)); lock.unlock()
     }
     func move(to point: CGPoint) {}

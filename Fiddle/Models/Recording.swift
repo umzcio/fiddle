@@ -20,19 +20,24 @@ struct RecordedEvent: Codable, Equatable {
     var x: Int
     var y: Int
     var delayMs: Int
+    /// CGEvent click state: 2 on both events of a double-click's second pair
+    /// (3 for a triple), 1 otherwise. Target apps read this field to detect
+    /// multi-clicks, so playback must reproduce it.
+    var clickState: Int = 1
 }
 
 // MARK: - Lenient decoder
 
 extension RecordedEvent {
-    private enum CodingKeys: String, CodingKey { case kind, button, x, y, delayMs }
+    private enum CodingKeys: String, CodingKey { case kind, button, x, y, delayMs, clickState }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        kind    = try c.decodeIfPresent(Kind.self,        forKey: .kind)    ?? .down
-        button  = try c.decodeIfPresent(MouseButton.self, forKey: .button)  ?? .left
-        x       = try c.decodeIfPresent(Int.self,         forKey: .x)       ?? 0
-        y       = try c.decodeIfPresent(Int.self,         forKey: .y)       ?? 0
-        delayMs = try c.decodeIfPresent(Int.self,         forKey: .delayMs) ?? 0
+        kind       = try c.decodeIfPresent(Kind.self,        forKey: .kind)       ?? .down
+        button     = try c.decodeIfPresent(MouseButton.self, forKey: .button)     ?? .left
+        x          = try c.decodeIfPresent(Int.self,         forKey: .x)          ?? 0
+        y          = try c.decodeIfPresent(Int.self,         forKey: .y)          ?? 0
+        delayMs    = try c.decodeIfPresent(Int.self,         forKey: .delayMs)    ?? 0
+        clickState = try c.decodeIfPresent(Int.self,         forKey: .clickState) ?? 1
     }
 }
 

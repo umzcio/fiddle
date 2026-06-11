@@ -51,4 +51,13 @@ final class RecordingTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(RecorderConfig.self, from: JSONEncoder().encode(cfg)), cfg)
         XCTAssertEqual(try JSONDecoder().decode([RecordedEvent].self, from: JSONEncoder().encode(events)), events)
     }
+
+    func testRecordedEventClickStateRoundTripAndLegacyDefault() throws {
+        // New field round-trips.
+        let doubled = RecordedEvent(kind: .down, button: .left, x: 1, y: 1, delayMs: 0, clickState: 2)
+        XCTAssertEqual(try JSONDecoder().decode(RecordedEvent.self, from: JSONEncoder().encode(doubled)).clickState, 2)
+        // Recordings saved before the field existed decode to clickState 1.
+        let legacy = Data(#"{"kind":"down","button":"left","x":1,"y":1,"delayMs":0}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(RecordedEvent.self, from: legacy).clickState, 1)
+    }
 }

@@ -52,7 +52,8 @@ final class ClickRecorder {
                 guard let refcon else { return Unmanaged.passUnretained(event) }
                 let recorder = Unmanaged<ClickRecorder>.fromOpaque(refcon).takeUnretainedValue()
                 let location = event.location
-                DispatchQueue.main.async { recorder.capture(type: type, location: location) }
+                let clickState = Int(event.getIntegerValueField(.mouseEventClickState))
+                DispatchQueue.main.async { recorder.capture(type: type, location: location, clickState: clickState) }
                 return Unmanaged.passUnretained(event)
             },
             userInfo: context
@@ -77,7 +78,7 @@ final class ClickRecorder {
         return events
     }
 
-    private func capture(type: CGEventType, location: CGPoint) {
+    private func capture(type: CGEventType, location: CGPoint, clickState: Int) {
         guard isRecording, let mapped = RecordEventMapping.event(for: type) else { return }
         if exclude?(location) == true { return }
         let now = DispatchTime.now().uptimeNanoseconds
@@ -86,7 +87,8 @@ final class ClickRecorder {
         events.append(RecordedEvent(
             kind: mapped.kind, button: mapped.button,
             x: Int(location.x.rounded()), y: Int(location.y.rounded()),
-            delayMs: max(0, delayMs)
+            delayMs: max(0, delayMs),
+            clickState: max(1, clickState)
         ))
     }
 }

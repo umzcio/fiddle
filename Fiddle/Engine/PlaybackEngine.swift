@@ -29,18 +29,19 @@ struct PlaybackRunState {
 // MARK: - Single-event posting seam
 
 protocol SingleMouseEventPosting {
-    func post(button: MouseButton, down: Bool, at point: CGPoint)
+    func post(button: MouseButton, down: Bool, at point: CGPoint, clickState: Int)
     func move(to point: CGPoint)
 }
 
 struct CGSingleEventPoster: SingleMouseEventPosting {
     private let source = CGEventSource(stateID: .combinedSessionState)
 
-    func post(button: MouseButton, down: Bool, at point: CGPoint) {
+    func post(button: MouseButton, down: Bool, at point: CGPoint, clickState: Int) {
         let source = self.source
         let cgButton = ClickMapping.cgButton(button)
         let type = down ? ClickMapping.downType(button) : ClickMapping.upType(button)
         if let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: cgButton) {
+            event.setIntegerValueField(.mouseEventClickState, value: Int64(max(1, clickState)))
             event.post(tap: .cghidEventTap)
         }
     }
@@ -107,10 +108,10 @@ final class PlaybackEngine {
         var completed = false
         // Downs posted without their matching up yet. Released on every exit,
         // so a stop or panic mid-pair cannot leave a button logically pressed.
-        var pressed: [MouseButton: CGPoint] = [:]
+        var pressed: [MouseButton: (point: CGPoint, clickState: Int)] = [:]
         defer {
-            for (button, point) in pressed {
-                poster.post(button: button, down: false, at: point)
+            for (button, held) in pressed {
+                poster.post(button: button, down: false, at: held.point, clickState: held.clickState)
             }
         }
         while isRunning(myGeneration) {
@@ -131,9 +132,9 @@ final class PlaybackEngine {
                     poster.move(to: point)
                 } else {
                     let down = event.kind == .down
-                    poster.post(button: event.button, down: down, at: point)
+                    poster.post(button: event.button, down: down, at: point, clickState: event.clickState)
                     if down {
-                        pressed[event.button] = point
+                        pressed[event.button] = (point, event.clickState)
                     } else {
                         pressed.removeValue(forKey: event.button)
                     }

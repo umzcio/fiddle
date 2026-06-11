@@ -75,8 +75,10 @@ enum MacroCompiler {
             case .click:
                 let pairs = step.clickType == .double ? 2 : 1
                 for pair in 0..<pairs {
-                    out.append(RecordedEvent(kind: .down, button: step.button, x: step.x, y: step.y, delayMs: pair == 0 ? pending : 30))
-                    out.append(RecordedEvent(kind: .up, button: step.button, x: step.x, y: step.y, delayMs: 10))
+                    // The second pair of a double click carries clickState 2 on
+                    // both events so target apps register a real double-click.
+                    out.append(RecordedEvent(kind: .down, button: step.button, x: step.x, y: step.y, delayMs: pair == 0 ? pending : 30, clickState: pair + 1))
+                    out.append(RecordedEvent(kind: .up, button: step.button, x: step.x, y: step.y, delayMs: 10, clickState: pair + 1))
                 }
                 pending = 0
             }

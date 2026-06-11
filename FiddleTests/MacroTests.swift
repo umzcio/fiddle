@@ -29,6 +29,16 @@ final class MacroTests: XCTestCase {
         XCTAssertEqual(events.map(\.kind), [.down, .up, .down, .up])
     }
 
+    func testDoubleClickSecondPairCarriesClickStateTwo() {
+        let events = MacroCompiler.compile([click(.left, .double, 5, 5)])
+        XCTAssertEqual(events.map(\.clickState), [1, 1, 2, 2])
+    }
+
+    func testSingleClickCarriesClickStateOne() {
+        let events = MacroCompiler.compile([click(.left, .single, 5, 5)])
+        XCTAssertEqual(events.map(\.clickState), [1, 1])
+    }
+
     func testMoveEmitsSingleMoveEvent() {
         let events = MacroCompiler.compile([wait(100), move(7, 8)])
         XCTAssertEqual(events.count, 1)
