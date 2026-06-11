@@ -420,6 +420,14 @@ final class FiddleController {
         }
         playbackEngine.stop()
         clickRecorder.start()
+        // Tap creation can fail even with the permission reported granted
+        // (granting Input Monitoring mid-session takes effect at relaunch).
+        // Never tell the UI a recording is active when no tap exists.
+        guard clickRecorder.isRecording else {
+            broadcast(.error(message: "Recording could not start. If you just granted Input Monitoring, quit and relaunch fiddle."))
+            emitRecording()
+            return
+        }
         broadcast(.recording(active: true, steps: RecordedSequence.displaySteps(store.settings.recording)))
     }
 
