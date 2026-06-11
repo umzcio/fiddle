@@ -289,6 +289,11 @@ final class FiddleController {
             emitHotkeys()   // revert the keycap to the real binding
             return
         }
+        guard HotkeyCombo.isAcceptableGlobalHotkey(shortcut) else {
+            broadcast(.error(message: "Add a modifier key (or use a function key); a bare key would stop working in every app."))
+            emitHotkeys()
+            return
+        }
         // Refuse a combo already bound to another action. The package fires
         // every matching handler on one press, and a later rebind of either
         // action unregisters the shared Carbon hotkey out from under the

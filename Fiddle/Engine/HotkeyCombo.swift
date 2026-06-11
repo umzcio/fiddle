@@ -68,6 +68,19 @@ enum HotkeyCombo {
         return KeyboardShortcuts.Shortcut(key, modifiers: flags)
     }
 
+    /// Whether a shortcut is safe to register as a system-wide hotkey. A bare
+    /// letter, digit, or punctuation key would be swallowed in every app, so
+    /// modifier-less bindings are allowed only for function keys and Escape.
+    /// (The keyboard auto-presser deliberately bypasses this; it parses combos
+    /// to press, not to register.)
+    static func isAcceptableGlobalHotkey(_ shortcut: KeyboardShortcuts.Shortcut) -> Bool {
+        let mods: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+        if !shortcut.modifiers.intersection(mods).isEmpty { return true }
+        guard let code = carbonToCode[shortcut.carbonKeyCode] else { return false }
+        if code == "Escape" { return true }
+        return code.hasPrefix("F") && Int(code.dropFirst()) != nil
+    }
+
     /// Render a Shortcut back to its canonical token string. Returns nil if the
     /// key code is not in our table.
     static func string(from shortcut: KeyboardShortcuts.Shortcut) -> String? {

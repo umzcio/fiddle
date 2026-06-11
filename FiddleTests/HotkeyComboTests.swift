@@ -46,6 +46,20 @@ final class HotkeyComboTests: XCTestCase {
         XCTAssertNil(HotkeyCombo.parse(""))
     }
 
+    func testGlobalHotkeyRejectsBareKeys() {
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a)))
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.one)))
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.space)))
+    }
+
+    func testGlobalHotkeyAllowsFunctionKeysEscapeAndModifiedKeys() {
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.f6)))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.f12)))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape)))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a, modifiers: [.command])))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape, modifiers: [.command])))
+    }
+
     func testStringFromShortcutCanonicalOrder() {
         let s = KeyboardShortcuts.Shortcut(.k, modifiers: [.command, .control])
         XCTAssertEqual(HotkeyCombo.string(from: s), "ctrl+cmd+KeyK")
