@@ -132,8 +132,9 @@ enum Config: Equatable {
     case keyboard(KeyboardConfig)
 }
 
-/// A preference value can arrive as a bool, int, or string from JS.
-enum PrefValue: Codable, Equatable {
+/// A preference value can arrive as a bool, int, or string from JS. It only
+/// rides the web-to-Swift Command, so it is Decodable-only.
+enum PrefValue: Decodable, Equatable {
     case bool(Bool)
     case int(Int)
     case string(String)
@@ -144,15 +145,6 @@ enum PrefValue: Codable, Equatable {
         if let i = try? c.decode(Int.self) { self = .int(i); return }
         if let s = try? c.decode(String.self) { self = .string(s); return }
         throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unsupported pref value")
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch self {
-        case .bool(let b): try c.encode(b)
-        case .int(let i): try c.encode(i)
-        case .string(let s): try c.encode(s)
-        }
     }
 }
 
