@@ -99,6 +99,14 @@ final class PlaybackEngine {
 
     private func playLoop() {
         var completed = false
+        // Downs posted without their matching up yet. Released on every exit,
+        // so a stop or panic mid-pair cannot leave a button logically pressed.
+        var pressed: [MouseButton: CGPoint] = [:]
+        defer {
+            for (button, point) in pressed {
+                poster.post(button: button, down: false, at: point)
+            }
+        }
         while isRunning() {
             let snapshot: [RecordedEvent] = { lock.lock(); defer { lock.unlock() }; return events }()
             for event in snapshot {
@@ -116,7 +124,13 @@ final class PlaybackEngine {
                 if event.kind == .move {
                     poster.move(to: point)
                 } else {
-                    poster.post(button: event.button, down: event.kind == .down, at: point)
+                    let down = event.kind == .down
+                    poster.post(button: event.button, down: down, at: point)
+                    if down {
+                        pressed[event.button] = point
+                    } else {
+                        pressed.removeValue(forKey: event.button)
+                    }
                 }
             }
             let again: Bool = {
