@@ -255,7 +255,6 @@ enum Event {
     case status(RunStatus)
     case permissions(accessibility: Bool, inputMonitoring: Bool)
     case positionPicked(x: Int, y: Int)
-    case hotkeyTriggered(action: HotkeyAction)
     case error(message: String)
     /// Pushes a saved config into the web UI so the controls reflect persisted
     /// state (sent on `ready`). The JS half mirrors this as `applyConfig`.
@@ -299,10 +298,6 @@ extension Event: Encodable {
             try c.encode("positionPicked", forKey: .type)
             try c.encode(x, forKey: .x)
             try c.encode(y, forKey: .y)
-
-        case .hotkeyTriggered(let action):
-            try c.encode("hotkeyTriggered", forKey: .type)
-            try c.encode(action, forKey: .action)
 
         case .error(let message):
             try c.encode("error", forKey: .type)

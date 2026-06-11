@@ -1540,7 +1540,6 @@
         case 'macros':         applyMacros(e.list); break;
         case 'profiles':       applyProfiles(e.list); break;
         case 'log':            pushActivity(e.message, e.level); break;
-        case 'hotkeyTriggered': /* visual feedback lands with HotkeyManager */ break;
         case 'error':          console.error('[fiddle]', e.message); pushActivity(e.message, 'error'); break;
       }
     }catch(err){ console.error('[fiddle] event handler failed', err); }

@@ -362,12 +362,10 @@ final class FiddleController {
     }
 
     private func hotkeyStartStop() {
-        broadcast(.hotkeyTriggered(action: .startStop))
         toggleStartStop()
     }
 
     private func hotkeyToggleJiggler() {
-        broadcast(.hotkeyTriggered(action: .toggleJiggler))
         if status == .running && lastMode == .jiggler {
             stopAll()
         } else {
@@ -379,7 +377,6 @@ final class FiddleController {
         stopAll()
         logActivity("Panic: all automation halted", level: "warn")
         picker.cancel()
-        broadcast(.hotkeyTriggered(action: .panic))
     }
 
     // MARK: - Position picker
