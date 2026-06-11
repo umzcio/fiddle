@@ -1124,7 +1124,7 @@
   function viewActivity(){
     const rows = state.activity.map(a=>{
       const color = a.level==='error' ? '#ff8a73' : a.level==='warn' ? '#ffd9a0' : 'rgba(255,255,255,.85)';
-      return `<div class="step" style="color:${color}">${a.message} <span>${a.time}</span></div>`;
+      return `<div class="step" style="color:${color}">${esc(a.message)} <span>${a.time}</span></div>`;
     }).join('');
     content.innerHTML=
       `<div class="group"><h4>Activity</h4>
