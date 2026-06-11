@@ -1104,13 +1104,15 @@
       </div>`;
     content.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>send({type:'applyProfile', id:b.dataset.apply}));
     content.querySelectorAll('[data-delp]').forEach(b=>b.onclick=()=>{ state.profiles=state.profiles.filter(p=>p.id!==b.dataset.delp); send({type:'saveProfiles', profiles:state.profiles}); viewProfiles(); applyBanner(); });
-    document.getElementById('profSave').onclick=()=>{
-      const name=prompt('Profile name','Profile '+(state.profiles.length+1));
-      if(!name) return;
-      state.profiles.push(captureProfile(name));
-      send({type:'saveProfiles', profiles:state.profiles});
-      viewProfiles(); applyBanner();
-    };
+    document.getElementById('profSave').onclick=saveCurrentProfile;
+  }
+  // Shared by the Profiles view button and the dock save orb.
+  function saveCurrentProfile(){
+    const name=prompt('Profile name','Profile '+(state.profiles.length+1));
+    if(!name) return;
+    state.profiles.push(captureProfile(name));
+    send({type:'saveProfiles', profiles:state.profiles});
+    if(state.cat==='profiles'){ viewProfiles(); applyBanner(); }
   }
   function applyProfiles(list){ state.profiles = Array.isArray(list)?list:[]; if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; } if(state.cat==='profiles'){ viewProfiles(); applyBanner(); } }
 
@@ -1593,6 +1595,12 @@
     });
 
     document.addEventListener('click', ()=>{ if(!menu.hidden) close(); });
+  })();
+
+  // ---------- dock save orb ----------
+  (function(){
+    const save=document.querySelector('.miniorb.save');
+    if(save) save.onclick=saveCurrentProfile;
   })();
 
   // ---------- About overlay (info orb) + external links ----------
