@@ -176,6 +176,14 @@ final class SettingsStore {
     func setKeyboard(_ config: KeyboardConfig) { settings.keyboard = config; save() }
     func setProfiles(_ profiles: [Profile]) { settings.profiles = profiles; save() }
 
+    /// Batch several mutations into a single encode + write, for callers that
+    /// change many fields at once (applying a profile re-encodes the whole
+    /// blob, recording included, so one save instead of six matters).
+    func update(_ mutate: (inout Settings) -> Void) {
+        mutate(&settings)
+        save()
+    }
+
     private func save() {
         do {
             let data = try JSONEncoder().encode(settings)

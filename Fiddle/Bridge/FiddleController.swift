@@ -573,12 +573,14 @@ final class FiddleController {
             broadcast(.error(message: "That profile was not found."))
             return
         }
-        store.setClicker(p.clicker)
-        store.setJiggler(p.jiggler)
-        store.setWakeLock(p.wakeLock)
-        store.setAntiAFK(p.antiAFK)
-        store.setKeyboard(p.keyboard)
-        store.setPref("device", .string(p.device))
+        store.update { settings in
+            settings.clicker = p.clicker
+            settings.jiggler = p.jiggler
+            settings.wakeLock = p.wakeLock
+            settings.antiAFK = p.antiAFK
+            settings.keyboard = p.keyboard
+            settings.prefs.device = p.device
+        }
         // Re-push so the UI reflects the applied profile.
         broadcast(.config(mode: .clicker, config: .clicker(p.clicker)))
         broadcast(.config(mode: .jiggler, config: .jiggler(p.jiggler)))
