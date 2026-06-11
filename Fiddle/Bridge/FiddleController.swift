@@ -72,6 +72,11 @@ final class FiddleController {
         playbackEngine.onFinished = { [weak self] in guard let self, self.lastMode == .recorder || self.lastMode == .macro else { return }; self.setStatus(.idle) }
         keyEngine.onFinished      = { [weak self] in guard let self, self.lastMode == .keyboard else { return }; self.setStatus(.idle) }
         clickRecorder.exclude = { [weak self] point in self?.pointInsideAppWindow(point) ?? false }
+        clickRecorder.onLimitReached = { [weak self] in
+            guard let self else { return }
+            self.endRecording()
+            self.broadcast(.error(message: "Recording stopped: the \(ClickRecorder.maxEvents)-step limit was reached."))
+        }
         configureHotkeys()
         applyStartupPrefs()
     }

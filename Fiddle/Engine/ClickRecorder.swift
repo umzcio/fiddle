@@ -24,6 +24,15 @@ final class ClickRecorder {
     /// own window). Set by the controller.
     var exclude: ((CGPoint) -> Bool)?
 
+    /// Hard cap on captured events. The recording persists inside the settings
+    /// blob, which is re-encoded on every save; an unbounded forgotten session
+    /// must not grow it without limit.
+    static let maxEvents = 10_000
+
+    /// Called on the main actor when the cap is hit, after capture stops
+    /// accepting events. Set by the controller (ends and persists the session).
+    var onLimitReached: (() -> Void)?
+
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     private var events: [RecordedEvent] = []
@@ -92,6 +101,7 @@ final class ClickRecorder {
     private func capture(type: CGEventType, location: CGPoint, clickState: Int) {
         guard isRecording, let mapped = RecordEventMapping.event(for: type) else { return }
         if exclude?(location) == true { return }
+        guard events.count < Self.maxEvents else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         let delayMs = lastTimestampNs == 0 ? 0 : Int((now &- lastTimestampNs) / 1_000_000)
         lastTimestampNs = now
@@ -101,5 +111,8 @@ final class ClickRecorder {
             delayMs: max(0, delayMs),
             clickState: max(1, clickState)
         ))
+        if events.count >= Self.maxEvents {
+            onLimitReached?()
+        }
     }
 }
