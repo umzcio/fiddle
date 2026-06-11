@@ -43,6 +43,7 @@ struct Settings: Codable, Equatable {
     var wakeLock: WakeLockConfig
     var antiAFK: AntiAFKConfig
     var recording: [RecordedEvent]
+    var recorder: RecorderConfig
     var macros: [Macro]
     var keyboard: KeyboardConfig
     var profiles: [Profile]
@@ -55,20 +56,21 @@ struct Settings: Codable, Equatable {
         wakeLock: WakeLockConfig(keepDisplayAwake: true, keepSystemAwake: false),
         antiAFK: AntiAFKConfig(intervalSec: 60, distancePx: 30, keepAwake: true),
         recording: [],
+        recorder: RecorderConfig(repeat: .until, times: 5),
         macros: [],
         keyboard: KeyboardConfig(combo: "Space", intervalMs: 1000, repeat: .until, times: 50),
         profiles: []
     )
 
-    private enum CodingKeys: String, CodingKey { case clicker, jiggler, prefs, wakeLock, antiAFK, recording, macros, keyboard, profiles }
+    private enum CodingKeys: String, CodingKey { case clicker, jiggler, prefs, wakeLock, antiAFK, recording, recorder, macros, keyboard, profiles }
 
-    init(clicker: ClickerConfig, jiggler: JigglerConfig, prefs: AppPrefs, wakeLock: WakeLockConfig, antiAFK: AntiAFKConfig, recording: [RecordedEvent], macros: [Macro], keyboard: KeyboardConfig, profiles: [Profile]) {
+    init(clicker: ClickerConfig, jiggler: JigglerConfig, prefs: AppPrefs, wakeLock: WakeLockConfig, antiAFK: AntiAFKConfig, recording: [RecordedEvent], recorder: RecorderConfig, macros: [Macro], keyboard: KeyboardConfig, profiles: [Profile]) {
         self.clicker = clicker; self.jiggler = jiggler; self.prefs = prefs
         self.wakeLock = wakeLock; self.antiAFK = antiAFK; self.recording = recording
-        self.macros = macros; self.keyboard = keyboard; self.profiles = profiles
+        self.recorder = recorder; self.macros = macros; self.keyboard = keyboard; self.profiles = profiles
     }
 
-    // Tolerate settings saved before `prefs`, `wakeLock`, `antiAFK`, `recording`, `macros`, or `keyboard` existed.
+    // Tolerate settings saved before `prefs`, `wakeLock`, `antiAFK`, `recording`, `recorder`, `macros`, or `keyboard` existed.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         clicker = try c.decode(ClickerConfig.self, forKey: .clicker)
@@ -77,6 +79,7 @@ struct Settings: Codable, Equatable {
         wakeLock = try c.decodeIfPresent(WakeLockConfig.self, forKey: .wakeLock) ?? WakeLockConfig(keepDisplayAwake: true, keepSystemAwake: false)
         antiAFK  = try c.decodeIfPresent(AntiAFKConfig.self,  forKey: .antiAFK)  ?? AntiAFKConfig(intervalSec: 60, distancePx: 30, keepAwake: true)
         recording = try c.decodeIfPresent([RecordedEvent].self, forKey: .recording) ?? []
+        recorder = try c.decodeIfPresent(RecorderConfig.self, forKey: .recorder) ?? RecorderConfig(repeat: .until, times: 5)
         macros = try c.decodeIfPresent([Macro].self, forKey: .macros) ?? []
         keyboard = try c.decodeIfPresent(KeyboardConfig.self, forKey: .keyboard) ?? KeyboardConfig(combo: "Space", intervalMs: 1000, repeat: .until, times: 50)
         profiles = try c.decodeIfPresent([Profile].self, forKey: .profiles) ?? []
@@ -118,6 +121,7 @@ final class SettingsStore {
     func setWakeLock(_ config: WakeLockConfig) { settings.wakeLock = config; save() }
     func setAntiAFK(_ config: AntiAFKConfig) { settings.antiAFK = config; save() }
     func setRecording(_ events: [RecordedEvent]) { settings.recording = events; save() }
+    func setRecorder(_ config: RecorderConfig) { settings.recorder = config; save() }
     func setMacros(_ macros: [Macro]) { settings.macros = macros; save() }
 
     func setPref(_ key: String, _ value: PrefValue) {

@@ -814,6 +814,7 @@
       if(code==='Escape' && mods.length===0){ btn.innerHTML=prev; btn.classList.remove('capturing'); document.removeEventListener('keydown',onKey,true); keyCaptureHandler=null; return; }
       state.keyboard.combo=[...mods, code].join('+');
       document.removeEventListener('keydown',onKey,true); keyCaptureHandler=null;
+      persist();
       viewKeyboard(); applyBanner();
     }
     keyCaptureHandler=onKey;
@@ -840,10 +841,10 @@
           <input class="field" id="ktimes" value="${k.times}"><span class="hint">times</span>
           <label class="radio"><input type="radio" name="krep" value="until" ${k.repeat==='until'?'checked':''}> Repeat until stopped</label></div>
       </div>`;
-    bind('kv-h', v=>k.hrs=+v||0); bind('kv-m', v=>k.min=+v||0); bind('kv-s', v=>k.sec=+v||0); bind('kv-ms', v=>k.ms=+v||0);
+    bind('kv-h', v=>{k.hrs=+v||0; persist();}); bind('kv-m', v=>{k.min=+v||0; persist();}); bind('kv-s', v=>{k.sec=+v||0; persist();}); bind('kv-ms', v=>{k.ms=+v||0; persist();});
     document.getElementById('kKey').onclick=()=>beginKeyCapture(document.getElementById('kKey'));
-    content.querySelectorAll('input[name=krep]').forEach(r=>r.onchange=()=>{ k.repeat=document.querySelector('input[name=krep]:checked').value; });
-    bind('ktimes', v=>k.times=+v||1);
+    content.querySelectorAll('input[name=krep]').forEach(r=>r.onchange=()=>{ k.repeat=document.querySelector('input[name=krep]:checked').value; persist(); });
+    bind('ktimes', v=>{k.times=+v||1; persist();});
   }
 
   function viewJiggler(){
@@ -888,8 +889,8 @@
           <div class="toggle ${w.keepSystem?'on':''}" id="wl-sys"><div class="knob"></div></div>
           <span class="hint">holds the Mac fully awake, not just the display</span></div>
       </div>`;
-    toggle('wl-disp', v=>w.keepDisplay=v);
-    toggle('wl-sys', v=>w.keepSystem=v);
+    toggle('wl-disp', v=>{w.keepDisplay=v; persist();});
+    toggle('wl-sys', v=>{w.keepSystem=v; persist();});
   }
   function viewAntiAFK(){
     const a=state.antiafk;
@@ -905,10 +906,10 @@
         <div class="row"><span class="lab">Keep display awake too</span>
           <div class="toggle ${a.keepAwake?'on':''}" id="afk-wake"><div class="knob"></div></div></div>
       </div>`;
-    bind('afk-secs', v=>a.secs=+v||0);
+    bind('afk-secs', v=>{a.secs=+v||0; persist();});
     const r=document.getElementById('afk-dist');
-    r.oninput=e=>{a.dist=+e.target.value;document.getElementById('afk-distval').textContent=a.dist};
-    toggle('afk-wake', v=>a.keepAwake=v);
+    r.oninput=e=>{a.dist=+e.target.value;document.getElementById('afk-distval').textContent=a.dist; persist();};
+    toggle('afk-wake', v=>{a.keepAwake=v; persist();});
   }
 
   function viewRecorder(){
@@ -944,8 +945,8 @@
     if(recClear) recClear.onclick=()=>send({type:'clearRecording'});
     const recPerm=document.getElementById('recPerm');
     if(recPerm) recPerm.onclick=()=>send({type:'openSettings', pane:'inputMonitoring'});
-    seg('recRepeat', v=>r.repeat=v);
-    bind('recTimes', v=>r.times=+v||1);
+    seg('recRepeat', v=>{r.repeat=v; persist();});
+    bind('recTimes', v=>{r.times=+v||1; persist();});
   }
 
   // ---------- macros ----------
@@ -1472,6 +1473,9 @@
       k.repeat = cfg.repeat==='times' ? 'times' : 'until';
       k.times = (cfg.times|0) || 50;
       if(state.cat==='clicker' && state.device==='keyboard') viewKeyboard();
+    } else if(mode==='recorder'){
+      state.recorder.repeat = cfg.repeat==='times' ? 'times' : 'until';
+      state.recorder.times = (cfg.times|0) || 1;
     }
     if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
     if(state.cat===mode && views[mode]) views[mode](); // re-render if showing this mode

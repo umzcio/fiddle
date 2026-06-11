@@ -389,6 +389,7 @@ final class FiddleController {
         broadcast(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)))
         broadcast(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)))
         broadcast(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)))
+        broadcast(.config(mode: .recorder, config: .recorder(store.settings.recorder)))
         broadcast(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)))
         emitPermissions()
         broadcast(prefsEvent())
@@ -407,6 +408,7 @@ final class FiddleController {
         case (.jiggler, .jiggler(let jigglerConfig)): store.setJiggler(jigglerConfig)
         case (.wakeLock, .wakeLock(let wl)): store.setWakeLock(wl)
         case (.antiAFK, .antiAFK(let a)):    store.setAntiAFK(a)
+        case (.recorder, .recorder(let rc)): store.setRecorder(rc)
         case (.keyboard, .keyboard(let kb)): store.setKeyboard(kb)
         default: return false
         }
@@ -426,7 +428,7 @@ final class FiddleController {
         case .jiggler:  return .jiggler(store.settings.jiggler)
         case .wakeLock: return .wakeLock(store.settings.wakeLock)
         case .antiAFK:  return .antiAFK(store.settings.antiAFK)
-        case .recorder: return .recorder(RecorderConfig(repeat: .until, times: 1))
+        case .recorder: return .recorder(store.settings.recorder)
         case .macro:    return .macro(MacroConfig(macroId: "", repeat: .until, times: 1))
         case .keyboard: return .keyboard(store.settings.keyboard)
         }

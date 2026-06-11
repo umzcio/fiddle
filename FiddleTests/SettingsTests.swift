@@ -164,6 +164,30 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(migrated.recording.isEmpty)
     }
 
+    func testRecorderConfigRoundTripAndLegacyDecode() throws {
+        var s = Settings.default
+        s.recorder = RecorderConfig(repeat: .times, times: 9)
+        let back = try JSONDecoder().decode(Settings.self, from: try JSONEncoder().encode(s))
+        XCTAssertEqual(s, back)
+        let legacy = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true}}
+        """
+        let migrated = try JSONDecoder().decode(Settings.self, from: Data(legacy.utf8))
+        XCTAssertEqual(migrated.recorder, RecorderConfig(repeat: .until, times: 5))
+    }
+
+    @MainActor
+    func testSetRecorderConfigPersists() {
+        let suite = "fiddle.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SettingsStore(defaults: defaults)
+        store.setRecorder(RecorderConfig(repeat: .times, times: 3))
+        let reloaded = SettingsStore(defaults: defaults)
+        XCTAssertEqual(reloaded.settings.recorder, RecorderConfig(repeat: .times, times: 3))
+    }
+
     @MainActor
     func testSetRecordingPersists() {
         let suite = "fiddle.test.\(UUID().uuidString)"
