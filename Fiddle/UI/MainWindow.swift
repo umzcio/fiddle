@@ -10,7 +10,6 @@
 
 import AppKit
 import WebKit
-import os
 
 /// Borderless windows refuse key/main status by default; the web UI needs both
 /// so its text fields and buttons are interactive.
@@ -46,7 +45,6 @@ final class MainWindowController: NSObject, BridgeHost {
     /// Wired by the app delegate (which owns the Sparkle updater) so the About
     /// overlay's "Check for Updates" button can trigger an update check.
     var onCheckForUpdates: (() -> Void)?
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
     private weak var hostedWebView: WKWebView?
     /// Center exactly once (initial layout); later fits keep the position the
     /// user dragged the window to.

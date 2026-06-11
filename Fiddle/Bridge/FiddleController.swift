@@ -9,7 +9,6 @@
 //
 
 import AppKit
-import os
 
 /// Anything that can deliver an Event to the web UI (implemented by the bridge).
 @MainActor
@@ -59,7 +58,6 @@ final class FiddleController {
     private let hotkeys = HotkeyManager()
     private let picker = PositionPicker()
     private let clickSound = ClickSound()
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "controller")
 
     private var status: RunStatus = .idle
     private var lastMode: AutomationMode = .clicker
