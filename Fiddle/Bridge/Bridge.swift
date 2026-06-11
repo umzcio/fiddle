@@ -98,7 +98,7 @@ final class FiddleBridge: NSObject {
             host?.performWindowAction(action)
             return
         }
-        controller?.handle(command)
+        controller?.handle(command, from: self)
     }
 }
 

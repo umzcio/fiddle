@@ -35,6 +35,13 @@ final class FiddleController {
         for entry in sinks { entry.sink?.emit(event) }
     }
 
+    /// Broadcast to every sink except the one a command originated from, so
+    /// the other surface syncs without re-rendering the form being edited.
+    private func broadcast(_ event: Event, excluding excluded: EngineEventSink?) {
+        sinks.removeAll { $0.sink == nil }
+        for entry in sinks where entry.sink !== excluded { entry.sink?.emit(event) }
+    }
+
     let store: SettingsStore
     private let permissions = PermissionsManager()
     private let clickEngine = ClickEngine()
@@ -86,17 +93,25 @@ final class FiddleController {
 
     // MARK: - Command routing
 
-    func handle(_ command: Command) {
+    func handle(_ command: Command, from sink: EngineEventSink? = nil) {
         switch command {
         case .ready:                          pushInitialState()
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
         case .start(let mode, let config):    start(mode: mode, config: config)
         case .stop:                           stopAll()
-        case .updateConfig(let mode, let config): saveConfig(mode: mode, config: config)
+        case .updateConfig(let mode, let config):
+            // Persist AND sync the other live surface (main window or menu-bar
+            // popover); otherwise its stale form state overwrites this edit on
+            // its next start.
+            if saveConfig(mode: mode, config: config) {
+                broadcast(.config(mode: mode, config: config), excluding: sink)
+            }
         case .pickPosition(let purpose):      beginPick(purpose: purpose)
         case .setHotkey(let action, let combo): setHotkey(action: action, combo: combo)
-        case .setPref(let key, let value):    applyPref(key: key, value: value)
+        case .setPref(let key, let value):
+            applyPref(key: key, value: value)
+            broadcast(prefsEvent(), excluding: sink)
         case .window:                         break  // handled by the window host
         case .recordStart:                    beginRecording()
         case .recordStop:                     endRecording()
@@ -371,23 +386,33 @@ final class FiddleController {
         broadcast(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)))
         broadcast(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)))
         emitPermissions()
-        let p = store.settings.prefs
-        broadcast(.prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode))
+        broadcast(prefsEvent())
         emitHotkeys()
         emitRecording()
         emitMacros()
         emitProfiles()
     }
 
-    private func saveConfig(mode: AutomationMode, config: Config) {
+    /// Persist a config edit. Returns false when the (mode, config) shapes do
+    /// not match and nothing was saved.
+    @discardableResult
+    private func saveConfig(mode: AutomationMode, config: Config) -> Bool {
         switch (mode, config) {
         case (.clicker, .clicker(let clickerConfig)): store.setClicker(clickerConfig)
         case (.jiggler, .jiggler(let jigglerConfig)): store.setJiggler(jigglerConfig)
         case (.wakeLock, .wakeLock(let wl)): store.setWakeLock(wl)
         case (.antiAFK, .antiAFK(let a)):    store.setAntiAFK(a)
         case (.keyboard, .keyboard(let kb)): store.setKeyboard(kb)
-        default: break
+        default: return false
         }
+        return true
+    }
+
+    /// The current prefs as a single Event, the same shape every prefs push
+    /// uses (initial state, profile apply, live pref edits).
+    private func prefsEvent() -> Event {
+        let p = store.settings.prefs
+        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode)
     }
 
     private func config(for mode: AutomationMode) -> Config {
@@ -487,8 +512,7 @@ final class FiddleController {
         broadcast(.config(mode: .wakeLock, config: .wakeLock(p.wakeLock)))
         broadcast(.config(mode: .antiAFK, config: .antiAFK(p.antiAFK)))
         broadcast(.config(mode: .keyboard, config: .keyboard(p.keyboard)))
-        let pr = store.settings.prefs
-        broadcast(.prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: pr.menuBarOnly, soundOnClick: pr.soundOnClick, skin: pr.skin, device: pr.device, interfaceMode: pr.interfaceMode))
+        broadcast(prefsEvent())
         logActivity("Applied profile \(p.name)")
     }
 
