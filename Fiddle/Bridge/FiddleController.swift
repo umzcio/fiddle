@@ -398,6 +398,14 @@ final class FiddleController {
     /// focus, since the user may have just toggled access in System Settings.
     func recheckPermissions() {
         emitPermissions()
+        // Engines that post events silently no-op once Accessibility is
+        // revoked: the timer keeps firing and the LED shows Running while
+        // nothing happens. Stop honestly instead.
+        let postsEvents: Set<AutomationMode> = [.clicker, .recorder, .macro, .keyboard]
+        if status == .running, postsEvents.contains(lastMode), !permissions.accessibilityTrusted() {
+            stopAll()
+            broadcast(.error(message: "Accessibility permission was revoked, so automation was stopped."))
+        }
     }
 
     private func openSettings(_ pane: SettingsPane) {
