@@ -90,10 +90,12 @@ struct CGEventMousePoster: MouseEventPosting {
         func postPair(clickState: Int64) {
             if let down = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: point, mouseButton: cgButton) {
                 down.setIntegerValueField(.mouseEventClickState, value: clickState)
+                down.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
                 down.post(tap: .cghidEventTap)
             }
             if let up = CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: point, mouseButton: cgButton) {
                 up.setIntegerValueField(.mouseEventClickState, value: clickState)
+                up.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
                 up.post(tap: .cghidEventTap)
             }
         }

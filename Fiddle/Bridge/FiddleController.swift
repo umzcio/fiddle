@@ -128,6 +128,10 @@ final class FiddleController {
     }
 
     private func start(mode: AutomationMode, config: Config) {
+        // Never run engines while the recorder tap is armed: even with
+        // synthesized events tagged and filtered, a recording session mixing
+        // live engine output makes no sense. End and persist it first.
+        if clickRecorder.isRecording { endRecording() }
         saveConfig(mode: mode, config: config)
         stopEngines()
         switch mode {

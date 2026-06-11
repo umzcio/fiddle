@@ -42,14 +42,17 @@ struct CGSingleEventPoster: SingleMouseEventPosting {
         let type = down ? ClickMapping.downType(button) : ClickMapping.upType(button)
         if let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: cgButton) {
             event.setIntegerValueField(.mouseEventClickState, value: Int64(max(1, clickState)))
+            event.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
             event.post(tap: .cghidEventTap)
         }
     }
 
     func move(to point: CGPoint) {
         let source = self.source
-        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
-            .post(tap: .cghidEventTap)
+        if let event = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            event.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
+            event.post(tap: .cghidEventTap)
+        }
     }
 }
 

@@ -12,6 +12,12 @@
 import CoreGraphics
 import Foundation
 
+/// Marker stamped on every mouse event fiddle synthesizes (clicker, playback),
+/// read back by the recorder tap so the app never records its own output.
+enum SyntheticEvents {
+    static let userDataTag: Int64 = 0xF1DD1E
+}
+
 @MainActor
 final class ClickRecorder {
     /// Returns true for points that should NOT be recorded (e.g. inside fiddle's
@@ -50,6 +56,11 @@ final class ClickRecorder {
                     return Unmanaged.passUnretained(event)
                 }
                 guard let refcon else { return Unmanaged.passUnretained(event) }
+                // Drop fiddle's own synthesized events; recording them would
+                // feed the app's output back in as if it were user input.
+                if event.getIntegerValueField(.eventSourceUserData) == SyntheticEvents.userDataTag {
+                    return Unmanaged.passUnretained(event)
+                }
                 let recorder = Unmanaged<ClickRecorder>.fromOpaque(refcon).takeUnretainedValue()
                 let location = event.location
                 let clickState = Int(event.getIntegerValueField(.mouseEventClickState))
