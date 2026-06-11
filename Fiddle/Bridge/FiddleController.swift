@@ -72,10 +72,13 @@ final class FiddleController {
 
     init(store: SettingsStore = SettingsStore()) {
         self.store = store
-        clickEngine.onFinished    = { [weak self] in guard let self, self.lastMode == .clicker  else { return }; self.setStatus(.idle) }
+        // The !isRunning guard drops stale completions: a bounded run's
+        // finished Task can land on the main actor after a stop+restart of the
+        // same mode, and must not flip the fresh run's status to idle.
+        clickEngine.onFinished    = { [weak self] in guard let self, self.lastMode == .clicker, !self.clickEngine.isRunning else { return }; self.setStatus(.idle) }
         picker.onPicked = { [weak self] x, y in self?.handlePicked(x: x, y: y) }
-        playbackEngine.onFinished = { [weak self] in guard let self, self.lastMode == .recorder || self.lastMode == .macro else { return }; self.setStatus(.idle) }
-        keyEngine.onFinished      = { [weak self] in guard let self, self.lastMode == .keyboard else { return }; self.setStatus(.idle) }
+        playbackEngine.onFinished = { [weak self] in guard let self, self.lastMode == .recorder || self.lastMode == .macro, !self.playbackEngine.isRunning else { return }; self.setStatus(.idle) }
+        keyEngine.onFinished      = { [weak self] in guard let self, self.lastMode == .keyboard, !self.keyEngine.isRunning else { return }; self.setStatus(.idle) }
         clickRecorder.exclude = { [weak self] point in self?.pointInsideAppWindow(point) ?? false }
         clickRecorder.onLimitReached = { [weak self] in
             guard let self else { return }

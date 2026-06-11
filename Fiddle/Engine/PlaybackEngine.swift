@@ -72,6 +72,13 @@ final class PlaybackEngine {
     /// Called on the main actor only when a run completes on its own.
     var onFinished: (@MainActor () -> Void)?
 
+    /// Whether a run is active right now. Lets a completion handler detect that
+    /// its notification is stale (a new run started before it was delivered).
+    var isRunning: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return running
+    }
+
     init(poster: SingleMouseEventPosting = CGSingleEventPoster()) {
         self.poster = poster
     }

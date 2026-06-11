@@ -121,6 +121,12 @@ final class ClickEngine {
     /// Called on the main actor when a bounded ("repeat N times") run completes.
     var onFinished: (@MainActor () -> Void)?
 
+    /// Whether a run is active right now. Lets a completion handler detect that
+    /// its notification is stale (a new run started before it was delivered).
+    var isRunning: Bool {
+        queue.sync { running }
+    }
+
     /// Called on the main actor after each click is posted, when set. The
     /// controller wires this to the click sound only while the pref is on, so a
     /// disabled sound costs zero per-click work. Read by fire() on `queue`, so
