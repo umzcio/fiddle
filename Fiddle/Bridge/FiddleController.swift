@@ -255,8 +255,27 @@ final class FiddleController {
             emitHotkeys()   // revert the keycap to the real binding
             return
         }
+        // Refuse a combo already bound to another action. The package fires
+        // every matching handler on one press, and a later rebind of either
+        // action unregisters the shared Carbon hotkey out from under the
+        // other; worst case the panic key dies until relaunch.
+        let allActions: [HotkeyAction] = [.startStop, .toggleJiggler, .pickPosition, .panic]
+        if let taken = allActions.first(where: { $0 != action && hotkeys.shortcut(for: $0) == shortcut }) {
+            broadcast(.error(message: "That key is already bound to \(Self.hotkeyLabel(taken))."))
+            emitHotkeys()
+            return
+        }
         hotkeys.setShortcut(shortcut, for: action)
         emitHotkeys()
+    }
+
+    private static func hotkeyLabel(_ action: HotkeyAction) -> String {
+        switch action {
+        case .startStop:     return "Start / Stop"
+        case .toggleJiggler: return "Toggle Jiggler"
+        case .pickPosition:  return "Pick Position"
+        case .panic:         return "Panic"
+        }
     }
 
     /// Push the current bindings so the web keycaps reflect persisted state.
