@@ -28,4 +28,17 @@ final class JiggleMathTests: XCTestCase {
         XCTAssertEqual(move, CGPoint(x: 60, y: 100))
         XCTAssertNil(restore)
     }
+
+    // The engine's own posted nudge resets the system idle clock; the reading
+    // then roughly equals the time since the nudge and must NOT count as user
+    // activity, or idle-only mode defeats itself.
+    func testOwnNudgeIsNotUserInput() {
+        XCTAssertFalse(JiggleMath.isRealUserInput(systemIdle: 30.0, sinceLastSynthetic: 30.1))
+        XCTAssertFalse(JiggleMath.isRealUserInput(systemIdle: 29.9, sinceLastSynthetic: 30.0))
+    }
+
+    func testNewerEventThanNudgeIsUserInput() {
+        XCTAssertTrue(JiggleMath.isRealUserInput(systemIdle: 0.2, sinceLastSynthetic: 30.0))
+        XCTAssertTrue(JiggleMath.isRealUserInput(systemIdle: 5.0, sinceLastSynthetic: 30.0))
+    }
 }

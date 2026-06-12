@@ -52,4 +52,9 @@ final class HotkeyManager {
     func shortcut(for action: HotkeyAction) -> KeyboardShortcuts.Shortcut? {
         KeyboardShortcuts.getShortcut(for: name(for: action))
     }
+
+    /// Restore every binding to the defaults declared above.
+    func resetToDefaults() {
+        KeyboardShortcuts.reset(.startStop, .toggleJiggler, .pickPosition, .panic)
+    }
 }

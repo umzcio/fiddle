@@ -29,26 +29,30 @@ struct PlaybackRunState {
 // MARK: - Single-event posting seam
 
 protocol SingleMouseEventPosting {
-    func post(button: MouseButton, down: Bool, at point: CGPoint)
+    func post(button: MouseButton, down: Bool, at point: CGPoint, clickState: Int)
     func move(to point: CGPoint)
 }
 
 struct CGSingleEventPoster: SingleMouseEventPosting {
     private let source = CGEventSource(stateID: .combinedSessionState)
 
-    func post(button: MouseButton, down: Bool, at point: CGPoint) {
+    func post(button: MouseButton, down: Bool, at point: CGPoint, clickState: Int) {
         let source = self.source
         let cgButton = ClickMapping.cgButton(button)
         let type = down ? ClickMapping.downType(button) : ClickMapping.upType(button)
         if let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: cgButton) {
+            event.setIntegerValueField(.mouseEventClickState, value: Int64(max(1, clickState)))
+            event.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
             event.post(tap: .cghidEventTap)
         }
     }
 
     func move(to point: CGPoint) {
         let source = self.source
-        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left)?
-            .post(tap: .cghidEventTap)
+        if let event = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+            event.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
+            event.post(tap: .cghidEventTap)
+        }
     }
 }
 
@@ -60,9 +64,20 @@ final class PlaybackEngine {
     private var events: [RecordedEvent] = []
     private var runState: PlaybackRunState?
     private var running = false
+    /// Run identity. Bumped on every start; a worker only acts while its own
+    /// generation is current, so a stale worker can neither keep playing after
+    /// a restart nor tear down the run that replaced it.
+    private var generation: UInt64 = 0
 
     /// Called on the main actor only when a run completes on its own.
     var onFinished: (@MainActor () -> Void)?
+
+    /// Whether a run is active right now. Lets a completion handler detect that
+    /// its notification is stale (a new run started before it was delivered).
+    var isRunning: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return running
+    }
 
     init(poster: SingleMouseEventPosting = CGSingleEventPoster()) {
         self.poster = poster
@@ -78,9 +93,11 @@ final class PlaybackEngine {
         self.events = events
         self.runState = PlaybackRunState(config: config)
         self.running = true
+        self.generation &+= 1
+        let myGeneration = generation
         lock.unlock()
 
-        let worker = Thread { [weak self] in self?.playLoop() }
+        let worker = Thread { [weak self] in self?.playLoop(myGeneration: myGeneration) }
         worker.qualityOfService = .userInitiated
         worker.start()
     }
@@ -92,43 +109,66 @@ final class PlaybackEngine {
         lock.unlock()
     }
 
-    private func isRunning() -> Bool {
+    private func isRunning(_ myGeneration: UInt64) -> Bool {
         lock.lock(); defer { lock.unlock() }
-        return running
+        return running && generation == myGeneration
     }
 
-    private func playLoop() {
+    private func playLoop(myGeneration: UInt64) {
         var completed = false
-        while isRunning() {
+        // Downs posted without their matching up yet. Released on every exit,
+        // so a stop or panic mid-pair cannot leave a button logically pressed.
+        var pressed: [MouseButton: (point: CGPoint, clickState: Int)] = [:]
+        defer {
+            for (button, held) in pressed {
+                poster.post(button: button, down: false, at: held.point, clickState: held.clickState)
+            }
+        }
+        while isRunning(myGeneration) {
             let snapshot: [RecordedEvent] = { lock.lock(); defer { lock.unlock() }; return events }()
             for event in snapshot {
                 if event.delayMs > 0 {
                     var remaining = event.delayMs
                     while remaining > 0 {
-                        if !isRunning() { return }
+                        if !isRunning(myGeneration) { return }
                         let slice = min(remaining, 25)
                         Thread.sleep(forTimeInterval: Double(slice) / 1000.0)
                         remaining -= slice
                     }
                 }
-                if !isRunning() { return }   // external stop: no onFinished
+                if !isRunning(myGeneration) { return }   // external stop: no onFinished
                 let point = CGPoint(x: event.x, y: event.y)
                 if event.kind == .move {
                     poster.move(to: point)
                 } else {
-                    poster.post(button: event.button, down: event.kind == .down, at: point)
+                    let down = event.kind == .down
+                    poster.post(button: event.button, down: down, at: point, clickState: event.clickState)
+                    if down {
+                        pressed[event.button] = (point, event.clickState)
+                    } else {
+                        pressed.removeValue(forKey: event.button)
+                    }
                 }
             }
-            let again: Bool = {
-                lock.lock(); defer { lock.unlock() }
-                guard running, var state = runState else { return false }
-                let cont = state.finishPass()
+            lock.lock()
+            let stale = !(running && generation == myGeneration)
+            var again = false
+            if !stale, var state = runState {
+                again = state.finishPass()
                 runState = state
-                return cont
-            }()
+            }
+            lock.unlock()
+            if stale { return }   // a newer run owns the engine now
             if !again { completed = true; break }
         }
-        lock.lock(); running = false; runState = nil; lock.unlock()
-        if completed, let onFinished { Task { @MainActor in onFinished() } }
+        lock.lock()
+        // Only tear down state that still belongs to this run.
+        if generation == myGeneration {
+            running = false
+            runState = nil
+        }
+        let notify = completed && generation == myGeneration
+        lock.unlock()
+        if notify, let onFinished { Task { @MainActor in onFinished() } }
     }
 }

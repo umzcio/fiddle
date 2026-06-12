@@ -9,7 +9,6 @@
 //
 
 import AppKit
-import os
 
 /// Anything that can deliver an Event to the web UI (implemented by the bridge).
 @MainActor
@@ -35,6 +34,18 @@ final class FiddleController {
         for entry in sinks { entry.sink?.emit(event) }
     }
 
+    /// Broadcast to every sink except the one a command originated from, so
+    /// the other surface syncs without re-rendering the form being edited.
+    private func broadcast(_ event: Event, excluding excluded: EngineEventSink?) {
+        sinks.removeAll { $0.sink == nil }
+        for entry in sinks where entry.sink !== excluded { entry.sink?.emit(event) }
+    }
+
+    /// Deliver to one sink when known, otherwise to everyone.
+    private func send(_ event: Event, to sink: EngineEventSink?) {
+        if let sink { sink.emit(event) } else { broadcast(event) }
+    }
+
     let store: SettingsStore
     private let permissions = PermissionsManager()
     private let clickEngine = ClickEngine()
@@ -47,7 +58,6 @@ final class FiddleController {
     private let hotkeys = HotkeyManager()
     private let picker = PositionPicker()
     private let clickSound = ClickSound()
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "controller")
 
     private var status: RunStatus = .idle
     private var lastMode: AutomationMode = .clicker
@@ -60,11 +70,19 @@ final class FiddleController {
 
     init(store: SettingsStore = SettingsStore()) {
         self.store = store
-        clickEngine.onFinished    = { [weak self] in guard let self, self.lastMode == .clicker  else { return }; self.setStatus(.idle) }
+        // The !isRunning guard drops stale completions: a bounded run's
+        // finished Task can land on the main actor after a stop+restart of the
+        // same mode, and must not flip the fresh run's status to idle.
+        clickEngine.onFinished    = { [weak self] in guard let self, self.lastMode == .clicker, !self.clickEngine.isRunning else { return }; self.setStatus(.idle) }
         picker.onPicked = { [weak self] x, y in self?.handlePicked(x: x, y: y) }
-        playbackEngine.onFinished = { [weak self] in guard let self, self.lastMode == .recorder || self.lastMode == .macro else { return }; self.setStatus(.idle) }
-        keyEngine.onFinished      = { [weak self] in guard let self, self.lastMode == .keyboard else { return }; self.setStatus(.idle) }
+        playbackEngine.onFinished = { [weak self] in guard let self, self.lastMode == .recorder || self.lastMode == .macro, !self.playbackEngine.isRunning else { return }; self.setStatus(.idle) }
+        keyEngine.onFinished      = { [weak self] in guard let self, self.lastMode == .keyboard, !self.keyEngine.isRunning else { return }; self.setStatus(.idle) }
         clickRecorder.exclude = { [weak self] point in self?.pointInsideAppWindow(point) ?? false }
+        clickRecorder.onLimitReached = { [weak self] in
+            guard let self else { return }
+            self.endRecording()
+            self.broadcast(.error(message: "Recording stopped: the \(ClickRecorder.maxEvents)-step limit was reached."))
+        }
         configureHotkeys()
         applyStartupPrefs()
     }
@@ -78,25 +96,36 @@ final class FiddleController {
 
     private func updateClickSoundHook() {
         if store.settings.prefs.soundOnClick {
-            clickEngine.onClick = { [weak self] in self?.clickSound.play() }
+            clickEngine.setOnClick { [weak self] in self?.clickSound.play() }
         } else {
-            clickEngine.onClick = nil
+            clickEngine.setOnClick(nil)
         }
     }
 
     // MARK: - Command routing
 
-    func handle(_ command: Command) {
+    func handle(_ command: Command, from sink: EngineEventSink? = nil) {
         switch command {
-        case .ready:                          pushInitialState()
+        case .ready:                          pushInitialState(to: sink)
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
         case .start(let mode, let config):    start(mode: mode, config: config)
         case .stop:                           stopAll()
-        case .updateConfig(let mode, let config): saveConfig(mode: mode, config: config)
+        case .updateConfig(let mode, let config):
+            // Persist AND sync the other live surface (main window or menu-bar
+            // popover); otherwise its stale form state overwrites this edit on
+            // its next start.
+            if saveConfig(mode: mode, config: config) {
+                broadcast(.config(mode: mode, config: config), excluding: sink)
+            }
         case .pickPosition(let purpose):      beginPick(purpose: purpose)
         case .setHotkey(let action, let combo): setHotkey(action: action, combo: combo)
-        case .setPref(let key, let value):    applyPref(key: key, value: value)
+        case .resetHotkeys:
+            hotkeys.resetToDefaults()
+            emitHotkeys()
+        case .setPref(let key, let value):
+            applyPref(key: key, value: value)
+            broadcast(prefsEvent(), excluding: sink)
         case .window:                         break  // handled by the window host
         case .recordStart:                    beginRecording()
         case .recordStop:                     endRecording()
@@ -110,7 +139,17 @@ final class FiddleController {
     private func applyPref(key: String, value: PrefValue) {
         store.setPref(key, value)
         switch (key, value) {
-        case ("launchAtLogin", .bool(let b)): LoginItem.setEnabled(b)
+        case ("launchAtLogin", .bool(let b)):
+            if !LoginItem.setEnabled(b) {
+                if b && LoginItem.requiresApproval {
+                    broadcast(.error(message: "macOS needs your approval: enable fiddle under Login Items in System Settings."))
+                    LoginItem.openSystemSettings()
+                } else {
+                    broadcast(.error(message: "The login item could not be \(b ? "enabled" : "disabled")."))
+                }
+                // Correct every surface's toggle, including the sender's.
+                broadcast(prefsEvent())
+            }
         case ("menuBarOnly", .bool(let b)):   NSApp.setActivationPolicy(b ? .accessory : .regular)
         case ("soundOnClick", _):             updateClickSoundHook()
         case ("skin", .string(let s)):        menuState?.skin = s
@@ -128,8 +167,17 @@ final class FiddleController {
     }
 
     private func start(mode: AutomationMode, config: Config) {
+        // Never run engines while the recorder tap is armed: even with
+        // synthesized events tagged and filtered, a recording session mixing
+        // live engine output makes no sense. End and persist it first.
+        if clickRecorder.isRecording { endRecording() }
         saveConfig(mode: mode, config: config)
         stopEngines()
+        // Everything is stopped now; say so before the guards below can bail.
+        // Without this, an early return (permission denied, empty recording,
+        // missing macro) leaves the LED and toggleStartStop stuck on Running
+        // with nothing running.
+        setStatus(.idle)
         switch mode {
         case .clicker:
             // Posting synthetic clicks requires Accessibility.
@@ -139,6 +187,11 @@ final class FiddleController {
                 return
             }
             guard case .clicker(let clickerConfig) = config else { return }
+            if clickerConfig.position == .fixed,
+               !Self.pointsWithinDisplays([CGPoint(x: clickerConfig.x, y: clickerConfig.y)]) {
+                broadcast(.error(message: "The saved fixed position is outside the connected displays. Pick it again."))
+                return
+            }
             clickEngine.start(config: clickerConfig)
             lastMode = .clicker
             setStatus(.running)
@@ -149,6 +202,11 @@ final class FiddleController {
             setStatus(.running)
         case .wakeLock:
             guard case .wakeLock(let wl) = config else { return }
+            // Both toggles off would show Running while holding no assertion.
+            guard wl.keepDisplayAwake || wl.keepSystemAwake else {
+                broadcast(.error(message: "Turn on at least one wake option first."))
+                return
+            }
             wakeLockEngine.start(config: wl)
             lastMode = .wakeLock
             setStatus(.running)
@@ -170,6 +228,10 @@ final class FiddleController {
                 broadcast(.error(message: "Record some clicks before playing."))
                 return
             }
+            guard Self.pointsWithinDisplays(events.map { CGPoint(x: $0.x, y: $0.y) }) else {
+                broadcast(.error(message: "This recording was made on a different display arrangement. Record it again."))
+                return
+            }
             playbackEngine.start(events: events, config: recorderConfig)
             lastMode = .recorder
             setStatus(.running)
@@ -187,6 +249,10 @@ final class FiddleController {
             let events = MacroCompiler.compile(macro.steps)
             guard !events.isEmpty else {
                 broadcast(.error(message: "That macro has no steps to play."))
+                return
+            }
+            guard Self.pointsWithinDisplays(events.map { CGPoint(x: $0.x, y: $0.y) }) else {
+                broadcast(.error(message: "That macro clicks outside the connected displays."))
                 return
             }
             playbackEngine.start(events: events, config: RecorderConfig(repeat: macroConfig.repeat, times: macroConfig.times))
@@ -212,6 +278,9 @@ final class FiddleController {
     }
 
     private func stopAll() {
+        // The recorder's tap is not an "engine", but stop and panic must halt
+        // it too; otherwise the system-wide tap keeps capturing after a panic.
+        if clickRecorder.isRecording { endRecording() }
         stopEngines()
         setStatus(.idle)
     }
@@ -252,12 +321,36 @@ final class FiddleController {
             emitHotkeys()   // revert the keycap to the real binding
             return
         }
+        guard HotkeyCombo.isAcceptableGlobalHotkey(shortcut) else {
+            broadcast(.error(message: "Add a modifier key (or use a function key); a bare key would stop working in every app."))
+            emitHotkeys()
+            return
+        }
+        // Refuse a combo already bound to another action. The package fires
+        // every matching handler on one press, and a later rebind of either
+        // action unregisters the shared Carbon hotkey out from under the
+        // other; worst case the panic key dies until relaunch.
+        let allActions: [HotkeyAction] = [.startStop, .toggleJiggler, .pickPosition, .panic]
+        if let taken = allActions.first(where: { $0 != action && hotkeys.shortcut(for: $0) == shortcut }) {
+            broadcast(.error(message: "That key is already bound to \(Self.hotkeyLabel(taken))."))
+            emitHotkeys()
+            return
+        }
         hotkeys.setShortcut(shortcut, for: action)
         emitHotkeys()
     }
 
+    private static func hotkeyLabel(_ action: HotkeyAction) -> String {
+        switch action {
+        case .startStop:     return "Start / Stop"
+        case .toggleJiggler: return "Toggle Jiggler"
+        case .pickPosition:  return "Pick Position"
+        case .panic:         return "Panic"
+        }
+    }
+
     /// Push the current bindings so the web keycaps reflect persisted state.
-    private func emitHotkeys() {
+    private func emitHotkeys(to sink: EngineEventSink? = nil) {
         let actions: [HotkeyAction] = [.startStop, .toggleJiggler, .pickPosition, .panic]
         var bindings: [String: String] = [:]
         for action in actions {
@@ -266,16 +359,14 @@ final class FiddleController {
                 bindings[action.rawValue] = token
             }
         }
-        broadcast(.hotkeys(bindings: bindings))
+        send(.hotkeys(bindings: bindings), to: sink)
     }
 
     private func hotkeyStartStop() {
-        broadcast(.hotkeyTriggered(action: .startStop))
         toggleStartStop()
     }
 
     private func hotkeyToggleJiggler() {
-        broadcast(.hotkeyTriggered(action: .toggleJiggler))
         if status == .running && lastMode == .jiggler {
             stopAll()
         } else {
@@ -287,7 +378,6 @@ final class FiddleController {
         stopAll()
         logActivity("Panic: all automation halted", level: "warn")
         picker.cancel()
-        broadcast(.hotkeyTriggered(action: .panic))
     }
 
     // MARK: - Position picker
@@ -299,6 +389,14 @@ final class FiddleController {
         }
         pickPurpose = purpose
         picker.begin()
+        // Tap creation can fail (permission granted mid-session takes effect
+        // at relaunch); the form is already waiting for positionPicked, so
+        // never leave it hanging silently.
+        guard picker.isPicking else {
+            pickPurpose = nil
+            broadcast(.error(message: "Position picking could not start. If you just changed permissions, quit and relaunch fiddle."))
+            return
+        }
     }
 
     private func handlePicked(x: Int, y: Int) {
@@ -316,17 +414,25 @@ final class FiddleController {
 
     // MARK: - Permissions
 
-    private func emitPermissions() {
-        broadcast(.permissions(
+    private func emitPermissions(to sink: EngineEventSink? = nil) {
+        send(.permissions(
             accessibility: permissions.accessibilityTrusted(),
             inputMonitoring: permissions.inputMonitoringGranted()
-        ))
+        ), to: sink)
     }
 
     /// Re-poll permission state and update the UI. Called when the app regains
     /// focus, since the user may have just toggled access in System Settings.
     func recheckPermissions() {
         emitPermissions()
+        // Engines that post events silently no-op once Accessibility is
+        // revoked: the timer keeps firing and the LED shows Running while
+        // nothing happens. Stop honestly instead.
+        let postsEvents: Set<AutomationMode> = [.clicker, .recorder, .macro, .keyboard]
+        if status == .running, postsEvents.contains(lastMode), !permissions.accessibilityTrusted() {
+            stopAll()
+            broadcast(.error(message: "Accessibility permission was revoked, so automation was stopped."))
+        }
     }
 
     private func openSettings(_ pane: SettingsPane) {
@@ -338,30 +444,48 @@ final class FiddleController {
 
     // MARK: - Settings
 
-    private func pushInitialState() {
-        broadcast(.config(mode: .clicker, config: .clicker(store.settings.clicker)))
-        broadcast(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)))
-        broadcast(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)))
-        broadcast(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)))
-        broadcast(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)))
-        emitPermissions()
-        let p = store.settings.prefs
-        broadcast(.prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode))
-        emitHotkeys()
-        emitRecording()
-        emitMacros()
-        emitProfiles()
+    /// Push the full saved state. Scoped to the surface whose `ready` asked for
+    /// it; one surface booting must not re-render (and re-fit) the other.
+    private func pushInitialState(to sink: EngineEventSink? = nil) {
+        send(.config(mode: .clicker, config: .clicker(store.settings.clicker)), to: sink)
+        send(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)), to: sink)
+        send(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)), to: sink)
+        send(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)), to: sink)
+        send(.config(mode: .recorder, config: .recorder(store.settings.recorder)), to: sink)
+        send(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)), to: sink)
+        emitPermissions(to: sink)
+        send(prefsEvent(), to: sink)
+        emitHotkeys(to: sink)
+        emitRecording(to: sink)
+        emitMacros(to: sink)
+        emitProfiles(to: sink)
+        if store.didResetToDefaults {
+            store.acknowledgeReset()
+            send(.error(message: "Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key."), to: sink)
+        }
     }
 
-    private func saveConfig(mode: AutomationMode, config: Config) {
+    /// Persist a config edit. Returns false when the (mode, config) shapes do
+    /// not match and nothing was saved.
+    @discardableResult
+    private func saveConfig(mode: AutomationMode, config: Config) -> Bool {
         switch (mode, config) {
         case (.clicker, .clicker(let clickerConfig)): store.setClicker(clickerConfig)
         case (.jiggler, .jiggler(let jigglerConfig)): store.setJiggler(jigglerConfig)
         case (.wakeLock, .wakeLock(let wl)): store.setWakeLock(wl)
         case (.antiAFK, .antiAFK(let a)):    store.setAntiAFK(a)
+        case (.recorder, .recorder(let rc)): store.setRecorder(rc)
         case (.keyboard, .keyboard(let kb)): store.setKeyboard(kb)
-        default: break
+        default: return false
         }
+        return true
+    }
+
+    /// The current prefs as a single Event, the same shape every prefs push
+    /// uses (initial state, profile apply, live pref edits).
+    private func prefsEvent() -> Event {
+        let p = store.settings.prefs
+        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode)
     }
 
     private func config(for mode: AutomationMode) -> Config {
@@ -370,7 +494,7 @@ final class FiddleController {
         case .jiggler:  return .jiggler(store.settings.jiggler)
         case .wakeLock: return .wakeLock(store.settings.wakeLock)
         case .antiAFK:  return .antiAFK(store.settings.antiAFK)
-        case .recorder: return .recorder(RecorderConfig(repeat: .until, times: 1))
+        case .recorder: return .recorder(store.settings.recorder)
         case .macro:    return .macro(MacroConfig(macroId: "", repeat: .until, times: 1))
         case .keyboard: return .keyboard(store.settings.keyboard)
         }
@@ -392,8 +516,22 @@ final class FiddleController {
             broadcast(.error(message: "Input Monitoring permission is required to record. Grant it in System Settings, then relaunch."))
             return
         }
-        playbackEngine.stop()
+        // Stopping a running engine here must go through stopAll so the run
+        // status follows; a bare engine stop leaves the LED stuck on Running.
+        if status == .running {
+            stopAll()
+        } else {
+            playbackEngine.stop()
+        }
         clickRecorder.start()
+        // Tap creation can fail even with the permission reported granted
+        // (granting Input Monitoring mid-session takes effect at relaunch).
+        // Never tell the UI a recording is active when no tap exists.
+        guard clickRecorder.isRecording else {
+            broadcast(.error(message: "Recording could not start. If you just granted Input Monitoring, quit and relaunch fiddle."))
+            emitRecording()
+            return
+        }
         broadcast(.recording(active: true, steps: RecordedSequence.displaySteps(store.settings.recording)))
     }
 
@@ -410,8 +548,8 @@ final class FiddleController {
         emitRecording()
     }
 
-    private func emitRecording() {
-        broadcast(.recording(active: false, steps: RecordedSequence.displaySteps(store.settings.recording)))
+    private func emitRecording(to sink: EngineEventSink? = nil) {
+        send(.recording(active: false, steps: RecordedSequence.displaySteps(store.settings.recording)), to: sink)
     }
 
     // MARK: - Macros
@@ -421,8 +559,8 @@ final class FiddleController {
         emitMacros()
     }
 
-    private func emitMacros() {
-        broadcast(.macros(list: store.settings.macros))
+    private func emitMacros(to sink: EngineEventSink? = nil) {
+        send(.macros(list: store.settings.macros), to: sink)
     }
 
     // MARK: - Profiles
@@ -432,8 +570,8 @@ final class FiddleController {
         emitProfiles()
     }
 
-    private func emitProfiles() {
-        broadcast(.profiles(list: store.settings.profiles))
+    private func emitProfiles(to sink: EngineEventSink? = nil) {
+        send(.profiles(list: store.settings.profiles), to: sink)
     }
 
     private func applyProfile(_ id: String) {
@@ -441,20 +579,21 @@ final class FiddleController {
             broadcast(.error(message: "That profile was not found."))
             return
         }
-        store.setClicker(p.clicker)
-        store.setJiggler(p.jiggler)
-        store.setWakeLock(p.wakeLock)
-        store.setAntiAFK(p.antiAFK)
-        store.setKeyboard(p.keyboard)
-        store.setPref("device", .string(p.device))
+        store.update { settings in
+            settings.clicker = p.clicker
+            settings.jiggler = p.jiggler
+            settings.wakeLock = p.wakeLock
+            settings.antiAFK = p.antiAFK
+            settings.keyboard = p.keyboard
+            settings.prefs.device = p.device
+        }
         // Re-push so the UI reflects the applied profile.
         broadcast(.config(mode: .clicker, config: .clicker(p.clicker)))
         broadcast(.config(mode: .jiggler, config: .jiggler(p.jiggler)))
         broadcast(.config(mode: .wakeLock, config: .wakeLock(p.wakeLock)))
         broadcast(.config(mode: .antiAFK, config: .antiAFK(p.antiAFK)))
         broadcast(.config(mode: .keyboard, config: .keyboard(p.keyboard)))
-        let pr = store.settings.prefs
-        broadcast(.prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: pr.menuBarOnly, soundOnClick: pr.soundOnClick, skin: pr.skin, device: pr.device, interfaceMode: pr.interfaceMode))
+        broadcast(prefsEvent())
         logActivity("Applied profile \(p.name)")
     }
 
@@ -476,15 +615,41 @@ final class FiddleController {
         }
     }
 
-    /// Best-effort: is the Quartz point inside one of fiddle's own windows?
-    /// Used to drop the user's own Record/Stop clicks from the recording.
-    private func pointInsideAppWindow(_ point: CGPoint) -> Bool {
+    /// Whether every Quartz-global point lands on a connected display. Posting
+    /// an off-screen point gets pinned to a display edge by the WindowServer
+    /// and clicks whatever UI lives there, so stale multi-display recordings
+    /// and fixed positions are refused instead.
+    private static func pointsWithinDisplays(_ points: [CGPoint]) -> Bool {
         guard let primary = NSScreen.screens.first else { return false }
         let maxY = primary.frame.maxY
-        for window in NSApp.windows where window.isVisible {
-            let f = window.frame   // AppKit, bottom-left origin
-            let quartz = CGRect(x: f.minX, y: maxY - f.maxY, width: f.width, height: f.height)
-            if quartz.contains(point) { return true }
+        // AppKit frames are bottom-left global; flip to Quartz top-left. The
+        // 1pt outset tolerates cursor coordinates rounded onto the edge.
+        let quartzFrames = NSScreen.screens.map { screen in
+            CGRect(x: screen.frame.minX, y: maxY - screen.frame.maxY,
+                   width: screen.frame.width, height: screen.frame.height)
+                .insetBy(dx: -1, dy: -1)
+        }
+        return points.allSatisfy { point in quartzFrames.contains { $0.contains(point) } }
+    }
+
+    /// Is the Quartz point over one of fiddle's own windows, z-order aware?
+    /// Used to drop the user's own Record/Stop clicks from the recording.
+    /// Pure frame containment would also exclude clicks on OTHER apps'
+    /// windows stacked in front of fiddle's, silently losing recorded steps,
+    /// so the topmost on-screen window at the point decides.
+    private func pointInsideAppWindow(_ point: CGPoint) -> Bool {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+        let myPid = pid_t(ProcessInfo.processInfo.processIdentifier)
+        for info in list {   // front-to-back order; bounds are Quartz global
+            guard
+                let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+                let bounds = CGRect(dictionaryRepresentation: boundsDict),
+                (info[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+                bounds.contains(point)
+            else { continue }
+            return (info[kCGWindowOwnerPID as String] as? pid_t) == myPid
         }
         return false
     }

@@ -102,6 +102,10 @@ final class ProtocolTests: XCTestCase {
         guard case .clearRecording = try Bridge.decodeCommand(from: try object(#"{"type":"clearRecording"}"#)) else { return XCTFail("clearRecording") }
     }
 
+    func testDecodeResetHotkeysCommand() throws {
+        guard case .resetHotkeys = try Bridge.decodeCommand(from: try object(#"{"type":"resetHotkeys"}"#)) else { return XCTFail("resetHotkeys") }
+    }
+
     func testDecodeStartRecorderCommand() throws {
         let cmd = try Bridge.decodeCommand(from: try object(#"{"type":"start","mode":"recorder","config":{"repeat":"times","times":4}}"#))
         guard case .start(let mode, let config) = cmd, mode == .recorder, case .recorder(let cfg) = config else {

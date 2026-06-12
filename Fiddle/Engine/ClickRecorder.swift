@@ -12,11 +12,26 @@
 import CoreGraphics
 import Foundation
 
+/// Marker stamped on every mouse event fiddle synthesizes (clicker, playback),
+/// read back by the recorder tap so the app never records its own output.
+enum SyntheticEvents {
+    static let userDataTag: Int64 = 0xF1DD1E
+}
+
 @MainActor
 final class ClickRecorder {
     /// Returns true for points that should NOT be recorded (e.g. inside fiddle's
     /// own window). Set by the controller.
     var exclude: ((CGPoint) -> Bool)?
+
+    /// Hard cap on captured events. The recording persists inside the settings
+    /// blob, which is re-encoded on every save; an unbounded forgotten session
+    /// must not grow it without limit.
+    static let maxEvents = 10_000
+
+    /// Called on the main actor when the cap is hit, after capture stops
+    /// accepting events. Set by the controller (ends and persists the session).
+    var onLimitReached: (() -> Void)?
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -50,9 +65,15 @@ final class ClickRecorder {
                     return Unmanaged.passUnretained(event)
                 }
                 guard let refcon else { return Unmanaged.passUnretained(event) }
+                // Drop fiddle's own synthesized events; recording them would
+                // feed the app's output back in as if it were user input.
+                if event.getIntegerValueField(.eventSourceUserData) == SyntheticEvents.userDataTag {
+                    return Unmanaged.passUnretained(event)
+                }
                 let recorder = Unmanaged<ClickRecorder>.fromOpaque(refcon).takeUnretainedValue()
                 let location = event.location
-                DispatchQueue.main.async { recorder.capture(type: type, location: location) }
+                let clickState = Int(event.getIntegerValueField(.mouseEventClickState))
+                DispatchQueue.main.async { recorder.capture(type: type, location: location, clickState: clickState) }
                 return Unmanaged.passUnretained(event)
             },
             userInfo: context
@@ -77,16 +98,21 @@ final class ClickRecorder {
         return events
     }
 
-    private func capture(type: CGEventType, location: CGPoint) {
+    private func capture(type: CGEventType, location: CGPoint, clickState: Int) {
         guard isRecording, let mapped = RecordEventMapping.event(for: type) else { return }
         if exclude?(location) == true { return }
+        guard events.count < Self.maxEvents else { return }
         let now = DispatchTime.now().uptimeNanoseconds
         let delayMs = lastTimestampNs == 0 ? 0 : Int((now &- lastTimestampNs) / 1_000_000)
         lastTimestampNs = now
         events.append(RecordedEvent(
             kind: mapped.kind, button: mapped.button,
             x: Int(location.x.rounded()), y: Int(location.y.rounded()),
-            delayMs: max(0, delayMs)
+            delayMs: max(0, delayMs),
+            clickState: max(1, clickState)
         ))
+        if events.count >= Self.maxEvents {
+            onLimitReached?()
+        }
     }
 }

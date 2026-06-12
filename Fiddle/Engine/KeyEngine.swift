@@ -79,6 +79,12 @@ final class KeyEngine {
 
     var onFinished: (@MainActor () -> Void)?
 
+    /// Whether a run is active right now. Lets a completion handler detect that
+    /// its notification is stale (a new run started before it was delivered).
+    var isRunning: Bool {
+        queue.sync { running }
+    }
+
     init(poster: KeyEventPosting = CGKeyEventPoster()) {
         self.poster = poster
     }

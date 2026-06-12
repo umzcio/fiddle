@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		0A0000000000000000000019 /* FiddleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000011 /* FiddleApp.swift */; };
 		0A000000000000000000001A /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000012 /* MainWindow.swift */; };
-		0A000000000000000000001B /* WebContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000013 /* WebContainerView.swift */; };
 		0A00000000000000000000AE /* MenuBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000AF /* MenuBar.swift */; };
 		0A000000000000000000001C /* Bridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000014 /* Bridge.swift */; };
 		0A000000000000000000001D /* Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000015 /* Protocol.swift */; };
@@ -62,7 +61,6 @@
 /* Begin PBXFileReference section */
 		0A0000000000000000000011 /* FiddleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiddleApp.swift; sourceTree = "<group>"; };
 		0A0000000000000000000012 /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
-		0A0000000000000000000013 /* WebContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebContainerView.swift; sourceTree = "<group>"; };
 		0A00000000000000000000AF /* MenuBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBar.swift; sourceTree = "<group>"; };
 		0A0000000000000000000014 /* Bridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bridge.swift; sourceTree = "<group>"; };
 		0A0000000000000000000015 /* Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Protocol.swift; sourceTree = "<group>"; };
@@ -157,7 +155,6 @@
 			isa = PBXGroup;
 			children = (
 				0A0000000000000000000012 /* MainWindow.swift */,
-				0A0000000000000000000013 /* WebContainerView.swift */,
 				0A00000000000000000000AF /* MenuBar.swift */,
 				0A0000000000000000000017 /* web */,
 			);
@@ -333,7 +330,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A000000000000000000001A /* MainWindow.swift in Sources */,
-				0A000000000000000000001B /* WebContainerView.swift in Sources */,
 				0A00000000000000000000AE /* MenuBar.swift in Sources */,
 				0A000000000000000000001C /* Bridge.swift in Sources */,
 				0A000000000000000000001D /* Protocol.swift in Sources */,

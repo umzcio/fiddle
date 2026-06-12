@@ -264,7 +264,7 @@
     background:linear-gradient(180deg,#c2f278 0%,#5fae27 52%,#2c6d10 100%);
     border:1px solid #20480a;
     box-shadow:0 0 0 1px rgba(255,255,255,.35) inset,0 -2px 3px rgba(0,0,0,.3) inset,0 1px 1px rgba(0,0,0,.4);
-    display:grid;place-items:center;color:#143405;font-size:9px;font-weight:700;cursor:pointer;
+    display:grid;place-items:center;color:#143405;font-size:9px;font-weight:700;
   }
   .panel-head .orb::before{
     content:"";position:absolute;left:18%;right:18%;top:8%;height:42%;border-radius:50%;
@@ -358,7 +358,7 @@
     border-radius:5px;padding:5px 11px;box-shadow:0 2px 0 #9aa0a8,0 3px 3px rgba(0,0,0,.3);cursor:pointer}
   .keycap:active{transform:translateY(2px);box-shadow:0 0 0 #9aa0a8}
   .keycap.capturing{background:linear-gradient(180deg,#fff7d6,#f3e08a);border-color:#b9962a;color:#5a4708}
-  .btn-reset{font-family:var(--font-body);font-size:11px;color:#1c2128;cursor:pointer;
+  .btn-reset{font-family:var(--font-ui);font-size:11px;color:#1c2128;cursor:pointer;
     background:linear-gradient(180deg,#f3f4f6,#cfd2d7 60%,#a7abb2);border:1px solid #6f7378;
     border-radius:6px;padding:4px 12px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset}
   .btn-reset:active{transform:translateY(1px)}
@@ -435,7 +435,7 @@
   .footer .ver{color:#5c5f65}
   .modeToggle{display:inline-flex;border:1px solid #9aa0a8;border-radius:999px;overflow:hidden;
     box-shadow:0 1px 0 rgba(255,255,255,.6) inset}
-  .modeToggle button{font-family:var(--font-body);font-size:10.5px;font-weight:700;color:#3d4046;
+  .modeToggle button{font-family:var(--font-ui);font-size:10.5px;font-weight:700;color:#3d4046;
     background:linear-gradient(180deg,#f3f4f6,#d3d7dd);border:none;padding:3px 12px;cursor:pointer}
   .modeToggle button+button{border-left:1px solid #9aa0a8}
   .modeToggle button.on{background:linear-gradient(180deg,var(--ac-c1),var(--ac-c2));color:#fff;
@@ -814,6 +814,7 @@
       if(code==='Escape' && mods.length===0){ btn.innerHTML=prev; btn.classList.remove('capturing'); document.removeEventListener('keydown',onKey,true); keyCaptureHandler=null; return; }
       state.keyboard.combo=[...mods, code].join('+');
       document.removeEventListener('keydown',onKey,true); keyCaptureHandler=null;
+      persist();
       viewKeyboard(); applyBanner();
     }
     keyCaptureHandler=onKey;
@@ -840,10 +841,10 @@
           <input class="field" id="ktimes" value="${k.times}"><span class="hint">times</span>
           <label class="radio"><input type="radio" name="krep" value="until" ${k.repeat==='until'?'checked':''}> Repeat until stopped</label></div>
       </div>`;
-    bind('kv-h', v=>k.hrs=+v||0); bind('kv-m', v=>k.min=+v||0); bind('kv-s', v=>k.sec=+v||0); bind('kv-ms', v=>k.ms=+v||0);
+    bind('kv-h', v=>{k.hrs=+v||0; persist();}); bind('kv-m', v=>{k.min=+v||0; persist();}); bind('kv-s', v=>{k.sec=+v||0; persist();}); bind('kv-ms', v=>{k.ms=+v||0; persist();});
     document.getElementById('kKey').onclick=()=>beginKeyCapture(document.getElementById('kKey'));
-    content.querySelectorAll('input[name=krep]').forEach(r=>r.onchange=()=>{ k.repeat=document.querySelector('input[name=krep]:checked').value; });
-    bind('ktimes', v=>k.times=+v||1);
+    content.querySelectorAll('input[name=krep]').forEach(r=>r.onchange=()=>{ k.repeat=document.querySelector('input[name=krep]:checked').value; persist(); });
+    bind('ktimes', v=>{k.times=+v||1; persist();});
   }
 
   function viewJiggler(){
@@ -888,8 +889,8 @@
           <div class="toggle ${w.keepSystem?'on':''}" id="wl-sys"><div class="knob"></div></div>
           <span class="hint">holds the Mac fully awake, not just the display</span></div>
       </div>`;
-    toggle('wl-disp', v=>w.keepDisplay=v);
-    toggle('wl-sys', v=>w.keepSystem=v);
+    toggle('wl-disp', v=>{w.keepDisplay=v; persist();});
+    toggle('wl-sys', v=>{w.keepSystem=v; persist();});
   }
   function viewAntiAFK(){
     const a=state.antiafk;
@@ -905,10 +906,10 @@
         <div class="row"><span class="lab">Keep display awake too</span>
           <div class="toggle ${a.keepAwake?'on':''}" id="afk-wake"><div class="knob"></div></div></div>
       </div>`;
-    bind('afk-secs', v=>a.secs=+v||0);
+    bind('afk-secs', v=>{a.secs=+v||0; persist();});
     const r=document.getElementById('afk-dist');
-    r.oninput=e=>{a.dist=+e.target.value;document.getElementById('afk-distval').textContent=a.dist};
-    toggle('afk-wake', v=>a.keepAwake=v);
+    r.oninput=e=>{a.dist=+e.target.value;document.getElementById('afk-distval').textContent=a.dist; persist();};
+    toggle('afk-wake', v=>{a.keepAwake=v; persist();});
   }
 
   function viewRecorder(){
@@ -944,8 +945,8 @@
     if(recClear) recClear.onclick=()=>send({type:'clearRecording'});
     const recPerm=document.getElementById('recPerm');
     if(recPerm) recPerm.onclick=()=>send({type:'openSettings', pane:'inputMonitoring'});
-    seg('recRepeat', v=>r.repeat=v);
-    bind('recTimes', v=>r.times=+v||1);
+    seg('recRepeat', v=>{r.repeat=v; persist();});
+    bind('recTimes', v=>{r.times=+v||1; persist();});
   }
 
   // ---------- macros ----------
@@ -1103,13 +1104,15 @@
       </div>`;
     content.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>send({type:'applyProfile', id:b.dataset.apply}));
     content.querySelectorAll('[data-delp]').forEach(b=>b.onclick=()=>{ state.profiles=state.profiles.filter(p=>p.id!==b.dataset.delp); send({type:'saveProfiles', profiles:state.profiles}); viewProfiles(); applyBanner(); });
-    document.getElementById('profSave').onclick=()=>{
-      const name=prompt('Profile name','Profile '+(state.profiles.length+1));
-      if(!name) return;
-      state.profiles.push(captureProfile(name));
-      send({type:'saveProfiles', profiles:state.profiles});
-      viewProfiles(); applyBanner();
-    };
+    document.getElementById('profSave').onclick=saveCurrentProfile;
+  }
+  // Shared by the Profiles view button and the dock save orb.
+  function saveCurrentProfile(){
+    const name=prompt('Profile name','Profile '+(state.profiles.length+1));
+    if(!name) return;
+    state.profiles.push(captureProfile(name));
+    send({type:'saveProfiles', profiles:state.profiles});
+    if(state.cat==='profiles'){ viewProfiles(); applyBanner(); }
   }
   function applyProfiles(list){ state.profiles = Array.isArray(list)?list:[]; if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; } if(state.cat==='profiles'){ viewProfiles(); applyBanner(); } }
 
@@ -1123,7 +1126,7 @@
   function viewActivity(){
     const rows = state.activity.map(a=>{
       const color = a.level==='error' ? '#ff8a73' : a.level==='warn' ? '#ffd9a0' : 'rgba(255,255,255,.85)';
-      return `<div class="step" style="color:${color}">${a.message} <span>${a.time}</span></div>`;
+      return `<div class="step" style="color:${color}">${esc(a.message)} <span>${a.time}</span></div>`;
     }).join('');
     content.innerHTML=
       `<div class="group"><h4>Activity</h4>
@@ -1206,8 +1209,9 @@
     send({type:'setHotkey', action, combo:[...mods, code].join('+')});
   }
   function resetHotkeys(){
-    const defs={startStop:'F6', toggleJiggler:'F7', pickPosition:'ctrl+opt+KeyP', panic:'cmd+Escape'};
-    Object.keys(defs).forEach(a=>send({type:'setHotkey', action:a, combo:defs[a]}));
+    // Defaults live with HotkeyManager in Swift; the controller echoes the
+    // restored bindings back via the hotkeys event.
+    send({type:'resetHotkeys'});
   }
 
   function viewMore(){
@@ -1472,6 +1476,9 @@
       k.repeat = cfg.repeat==='times' ? 'times' : 'until';
       k.times = (cfg.times|0) || 50;
       if(state.cat==='clicker' && state.device==='keyboard') viewKeyboard();
+    } else if(mode==='recorder'){
+      state.recorder.repeat = cfg.repeat==='times' ? 'times' : 'until';
+      state.recorder.times = (cfg.times|0) || 1;
     }
     if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
     if(state.cat===mode && views[mode]) views[mode](); // re-render if showing this mode
@@ -1534,7 +1541,6 @@
         case 'macros':         applyMacros(e.list); break;
         case 'profiles':       applyProfiles(e.list); break;
         case 'log':            pushActivity(e.message, e.level); break;
-        case 'hotkeyTriggered': /* visual feedback lands with HotkeyManager */ break;
         case 'error':          console.error('[fiddle]', e.message); pushActivity(e.message, 'error'); break;
       }
     }catch(err){ console.error('[fiddle] event handler failed', err); }
@@ -1589,6 +1595,12 @@
     });
 
     document.addEventListener('click', ()=>{ if(!menu.hidden) close(); });
+  })();
+
+  // ---------- dock save orb ----------
+  (function(){
+    const save=document.querySelector('.miniorb.save');
+    if(save) save.onclick=saveCurrentProfile;
   })();
 
   // ---------- About overlay (info orb) + external links ----------

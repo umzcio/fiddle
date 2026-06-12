@@ -90,10 +90,12 @@ struct CGEventMousePoster: MouseEventPosting {
         func postPair(clickState: Int64) {
             if let down = CGEvent(mouseEventSource: source, mouseType: downType, mouseCursorPosition: point, mouseButton: cgButton) {
                 down.setIntegerValueField(.mouseEventClickState, value: clickState)
+                down.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
                 down.post(tap: .cghidEventTap)
             }
             if let up = CGEvent(mouseEventSource: source, mouseType: upType, mouseCursorPosition: point, mouseButton: cgButton) {
                 up.setIntegerValueField(.mouseEventClickState, value: clickState)
+                up.setIntegerValueField(.eventSourceUserData, value: SyntheticEvents.userDataTag)
                 up.post(tap: .cghidEventTap)
             }
         }
@@ -119,10 +121,21 @@ final class ClickEngine {
     /// Called on the main actor when a bounded ("repeat N times") run completes.
     var onFinished: (@MainActor () -> Void)?
 
+    /// Whether a run is active right now. Lets a completion handler detect that
+    /// its notification is stale (a new run started before it was delivered).
+    var isRunning: Bool {
+        queue.sync { running }
+    }
+
     /// Called on the main actor after each click is posted, when set. The
     /// controller wires this to the click sound only while the pref is on, so a
-    /// disabled sound costs zero per-click work.
-    var onClick: (@MainActor () -> Void)?
+    /// disabled sound costs zero per-click work. Read by fire() on `queue`, so
+    /// writes must hop onto the queue too (the pref can toggle mid-run).
+    private var onClick: (@MainActor () -> Void)?
+
+    func setOnClick(_ handler: (@MainActor () -> Void)?) {
+        queue.sync { self.onClick = handler }
+    }
 
     init(poster: MouseEventPosting = CGEventMousePoster()) {
         self.poster = poster

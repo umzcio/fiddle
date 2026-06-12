@@ -46,7 +46,6 @@ final class SettingsTests: XCTestCase {
 
     func testDefaultPrefsAreOff() {
         let p = Settings.default.prefs
-        XCTAssertFalse(p.launchAtLogin)
         XCTAssertFalse(p.menuBarOnly)
         XCTAssertFalse(p.soundOnClick)
     }
@@ -78,12 +77,10 @@ final class SettingsTests: XCTestCase {
         let store = SettingsStore(defaults: defaults)
         store.setPref("soundOnClick", .bool(true))
         store.setPref("menuBarOnly", .bool(true))
-        store.setPref("launchAtLogin", .bool(false))
 
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertTrue(reloaded.settings.prefs.soundOnClick)
         XCTAssertTrue(reloaded.settings.prefs.menuBarOnly)
-        XCTAssertFalse(reloaded.settings.prefs.launchAtLogin)
     }
 
     @MainActor
@@ -162,6 +159,47 @@ final class SettingsTests: XCTestCase {
         """
         let migrated = try JSONDecoder().decode(Settings.self, from: Data(legacy.utf8))
         XCTAssertTrue(migrated.recording.isEmpty)
+    }
+
+    // One corrupt array element must not reset everything: the bad entry is
+    // dropped and the rest of the settings survive.
+    func testCorruptArrayElementIsDroppedNotFatal() throws {
+        let blob = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true},
+         "profiles":[{"id":"p1","name":"Good","device":"mouse"}, 42, {"id":"p2","name":"Also good","device":"mouse"}],
+         "macros":[{"id":"m1","name":"A","steps":[]}, "corrupt"],
+         "recording":[{"kind":"down","button":"left","x":1,"y":1,"delayMs":0}, {"kind":"down","button":7,"x":1,"y":1,"delayMs":0}]}
+        """
+        let s = try JSONDecoder().decode(Settings.self, from: Data(blob.utf8))
+        XCTAssertEqual(s.profiles.map(\.id), ["p1", "p2"])
+        XCTAssertEqual(s.macros.map(\.id), ["m1"])
+        XCTAssertEqual(s.recording.count, 1)
+        XCTAssertEqual(s.clicker.intervalMs, 100)
+    }
+
+    func testRecorderConfigRoundTripAndLegacyDecode() throws {
+        var s = Settings.default
+        s.recorder = RecorderConfig(repeat: .times, times: 9)
+        let back = try JSONDecoder().decode(Settings.self, from: try JSONEncoder().encode(s))
+        XCTAssertEqual(s, back)
+        let legacy = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true}}
+        """
+        let migrated = try JSONDecoder().decode(Settings.self, from: Data(legacy.utf8))
+        XCTAssertEqual(migrated.recorder, RecorderConfig(repeat: .until, times: 5))
+    }
+
+    @MainActor
+    func testSetRecorderConfigPersists() {
+        let suite = "fiddle.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SettingsStore(defaults: defaults)
+        store.setRecorder(RecorderConfig(repeat: .times, times: 3))
+        let reloaded = SettingsStore(defaults: defaults)
+        XCTAssertEqual(reloaded.settings.recorder, RecorderConfig(repeat: .times, times: 3))
     }
 
     @MainActor

@@ -132,8 +132,9 @@ enum Config: Equatable {
     case keyboard(KeyboardConfig)
 }
 
-/// A preference value can arrive as a bool, int, or string from JS.
-enum PrefValue: Codable, Equatable {
+/// A preference value can arrive as a bool, int, or string from JS. It only
+/// rides the web-to-Swift Command, so it is Decodable-only.
+enum PrefValue: Decodable, Equatable {
     case bool(Bool)
     case int(Int)
     case string(String)
@@ -144,15 +145,6 @@ enum PrefValue: Codable, Equatable {
         if let i = try? c.decode(Int.self) { self = .int(i); return }
         if let s = try? c.decode(String.self) { self = .string(s); return }
         throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unsupported pref value")
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch self {
-        case .bool(let b): try c.encode(b)
-        case .int(let i): try c.encode(i)
-        case .string(let s): try c.encode(s)
-        }
     }
 }
 
@@ -165,6 +157,9 @@ enum Command: Equatable {
     case updateConfig(mode: AutomationMode, config: Config)
     case pickPosition(purpose: String?)
     case setHotkey(action: HotkeyAction, combo: String)
+    /// Restore every hotkey binding to its default. The defaults live with
+    /// HotkeyManager (the single source of truth), not in the web layer.
+    case resetHotkeys
     case setPref(key: String, value: PrefValue)
     case checkPermissions
     case openSettings(pane: SettingsPane)
@@ -224,6 +219,7 @@ extension Command: Decodable {
         case "recordStart":      self = .recordStart
         case "recordStop":       self = .recordStop
         case "clearRecording":   self = .clearRecording
+        case "resetHotkeys":     self = .resetHotkeys
 
         default:
             throw DecodingError.dataCorruptedError(
@@ -255,7 +251,6 @@ enum Event {
     case status(RunStatus)
     case permissions(accessibility: Bool, inputMonitoring: Bool)
     case positionPicked(x: Int, y: Int)
-    case hotkeyTriggered(action: HotkeyAction)
     case error(message: String)
     /// Pushes a saved config into the web UI so the controls reflect persisted
     /// state (sent on `ready`). The JS half mirrors this as `applyConfig`.
@@ -299,10 +294,6 @@ extension Event: Encodable {
             try c.encode("positionPicked", forKey: .type)
             try c.encode(x, forKey: .x)
             try c.encode(y, forKey: .y)
-
-        case .hotkeyTriggered(let action):
-            try c.encode("hotkeyTriggered", forKey: .type)
-            try c.encode(action, forKey: .action)
 
         case .error(let message):
             try c.encode("error", forKey: .type)
@@ -444,24 +435,3 @@ enum Bridge {
         return "\(eventFunction)(\(json))"
     }
 }
-
-//
-//  Example wiring (for reference; real code lives in Bridge.swift):
-//
-//  final class FiddleBridge: NSObject, WKScriptMessageHandler {
-//      func userContentController(_ ucc: WKUserContentController,
-//                                 didReceive message: WKScriptMessage) {
-//          do {
-//              let command = try Bridge.decodeCommand(from: message.body)
-//              route(command)            // hand off to the engine
-//          } catch {
-//              emit(.error(message: "Bad command: \(error)"))
-//          }
-//      }
-//
-//      func emit(_ event: Event) {
-//          guard let js = try? Bridge.script(for: event) else { return }
-//          Task { @MainActor in webView.evaluateJavaScript(js) }
-//      }
-//  }
-//

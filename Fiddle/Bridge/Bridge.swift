@@ -4,12 +4,8 @@
 //
 //  The WKWebView side of the typed contract in Protocol.swift. It owns the web
 //  view, registers the "fiddle" message handler, decodes inbound Commands, and
-//  emits Events back to the page.
-//
-//  This is the Phase 1 scaffold: it wires up the web view, the window orbs, and
-//  the load lifecycle. Routing of engine commands (start / stop / pickPosition /
-//  permissions / hotkeys) is filled in during engine implementation; for now
-//  unhandled commands are logged so the seam is visible.
+//  emits Events back to the page. Window-chrome actions go to the host; every
+//  other command is forwarded to the FiddleController.
 //
 
 import Foundation
@@ -98,7 +94,7 @@ final class FiddleBridge: NSObject {
             host?.performWindowAction(action)
             return
         }
-        controller?.handle(command)
+        controller?.handle(command, from: self)
     }
 }
 

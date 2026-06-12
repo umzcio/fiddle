@@ -10,7 +10,6 @@
 
 import AppKit
 import WebKit
-import os
 
 /// Borderless windows refuse key/main status by default; the web UI needs both
 /// so its text fields and buttons are interactive.
@@ -46,8 +45,10 @@ final class MainWindowController: NSObject, BridgeHost {
     /// Wired by the app delegate (which owns the Sparkle updater) so the About
     /// overlay's "Check for Updates" button can trigger an update check.
     var onCheckForUpdates: (() -> Void)?
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
     private weak var hostedWebView: WKWebView?
+    /// Center exactly once (initial layout); later fits keep the position the
+    /// user dragged the window to.
+    private var hasCenteredOnce = false
 
     // Initial size; replaced by the measured shell size once the UI loads.
     private static let initialSize = NSSize(width: 844, height: 660)
@@ -164,9 +165,15 @@ final class MainWindowController: NSObject, BridgeHost {
             else { return }
             let newSize = NSSize(width: width, height: height)
             var frame = self.window.frame
+            // Keep the visual top-left corner fixed while resizing (AppKit
+            // frames are bottom-left anchored).
+            frame.origin.y = frame.maxY - newSize.height
             frame.size = newSize
             self.window.setFrame(frame, display: true, animate: false)
-            self.window.center()
+            if !self.hasCenteredOnce {
+                self.window.center()
+                self.hasCenteredOnce = true
+            }
         }
     }
 
