@@ -183,4 +183,26 @@ final class ProtocolTests: XCTestCase {
         let js = try Bridge.script(for: .log(message: "Started Auto Clicker", level: "info"))
         XCTAssertTrue(js.contains("\"type\":\"log\"")); XCTAssertTrue(js.contains("\"message\":\"Started Auto Clicker\"")); XCTAssertTrue(js.contains("\"level\":\"info\""))
     }
+
+    func testDecodeRejectsNonObjectBody() {
+        // JSONSerialization.data(withJSONObject:) raises an uncatchable ObjC
+        // exception for these; decodeCommand must throw a Swift error instead.
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: "just a string"))
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: 42))
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: ["a", "b"]))
+    }
+
+    func testDecodeRejectsFractionalIntField() throws {
+        let json = #"{"type":"start","mode":"clicker","config":{"intervalMs":250.5,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":0,"y":0}}"#
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: try object(json)))
+    }
+
+    func testEncodePositionPickedCarriesPurpose() throws {
+        let js = try Bridge.script(for: .positionPicked(x: 3, y: 4, purpose: "step"))
+        XCTAssertTrue(js.contains("\"type\":\"positionPicked\""))
+        XCTAssertTrue(js.contains("\"x\":3"))
+        XCTAssertTrue(js.contains("\"purpose\":\"step\""))
+        let plain = try Bridge.script(for: .positionPicked(x: 3, y: 4, purpose: nil))
+        XCTAssertFalse(plain.contains("purpose"))
+    }
 }

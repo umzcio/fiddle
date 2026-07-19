@@ -61,9 +61,31 @@ surgery but outside the findings being fixed.
   replace the prompt with an in-DOM name field. Verify on a real run first.
 
 - **PositionPicker can capture fiddle's own synthesized click as the pick.**
-  While fixing M3, the recorder tap gained a synthetic-event filter
-  (`SyntheticEvents.userDataTag`), but `PositionPicker`'s tap does not check
-  it. If the clicker is running when the user starts a position pick, a
-  synthesized click can satisfy the pick instead of the user's. Same one-line
-  filter as ClickRecorder would fix it; left untouched because the finding
-  covered only the recorder.
+  Fixed on the audit-remediation branch (2026-07-19): the picker tap now
+  checks `SyntheticEvents.userDataTag` like the recorder does.
+
+## Deferred findings from the 2026-07-19 full audit
+
+Confirmed by the audit's adversarial verification but intentionally not
+fixed on the audit-remediation branch; each needs either a design decision
+or its own reviewed change.
+
+- **PlaybackEngine: replaced worker's compensating mouse-ups can race a new
+  run.** When playback is restarted, the old worker's cleanup mouse-ups can
+  land after the new run pressed the same button, releasing it early. Needs
+  a run-generation token checked before posting compensating events.
+
+- **Keyboard auto-presser can synthesize fiddle's own global hotkeys.** If
+  the configured key matches a registered hotkey (for example the Start/Stop
+  combo), the first synthesized press stops or toggles fiddle itself. Carbon
+  hotkeys cannot filter by event source; needs either a warning in the UI
+  when the chosen combo collides with a binding, or suppressing hotkey
+  handling while the key engine runs.
+
+- **Macro Player repeat/times are session-only.** They are never persisted,
+  and an updateConfig for mode "macro" is silently dropped by saveConfig.
+  Persisting them means a settings schema addition.
+
+- **Quitting from Click Sequencer relaunches into Macro Player.** Both
+  categories record lastMode "macro" and the restore map resolves it to the
+  Macro Player view. Cosmetic; distinguishing them needs a UI-only pref.
