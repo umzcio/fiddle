@@ -134,9 +134,6 @@
     user-select:none;padding-left:4px;
   }
   .logo b{color:var(--ac-bri);text-shadow:0 1px 0 #fff}
-  .logo .pip{display:inline-block;width:11px;height:11px;border-radius:50%;margin-left:7px;vertical-align:9px;
-    background:radial-gradient(circle at 35% 28%,var(--ac-glow),var(--ac-bri) 60%,var(--ac-dk));
-    box-shadow:0 1px 0 rgba(255,255,255,.55) inset,0 0 7px rgba(226,56,31,.65)}
 
   .selector{
     position:relative;
@@ -235,7 +232,6 @@
   .cat.active::before{opacity:1;transform:scale(1)}       /* full glossy tile when selected */
   .cat:hover:not(.active){transform:translateY(-2px)}
   .cat.spacer{flex:1;cursor:default;width:auto}
-  .cat .pad{display:none}
 
   .cat-label{
     padding:2px 18px 0;font-family:var(--font-disp);font-weight:700;font-size:26px;
@@ -442,7 +438,6 @@
   .modeToggle button.on{background:linear-gradient(180deg,var(--ac-c1),var(--ac-c2));color:#fff;
     text-shadow:0 1px 0 rgba(0,0,0,.25)}
 
-  .note{margin-top:14px;text-align:center;color:#aeb3bb;font-size:11.5px;max-width:844px;line-height:1.5}
 
   /* ============ ACCESSIBILITY ============ */
   /* Visually hidden but screen-reader-readable, for the polite live region below. */
@@ -757,7 +752,16 @@
   // hotkey, menu bar, the flame) uses what the user actually set rather than the
   // last-started snapshot. Without this, editing the rate then starting via the
   // hotkey would run the stale saved interval.
-  function persist(){ const m=currentMode(); send({type:'updateConfig', mode:m, config:currentConfig(m)}); }
+  // One updateConfig per pause in editing, not per keystroke: every send
+  // re-encodes and rewrites the whole settings blob on the Swift side and
+  // re-syncs the other surface. The mode is captured at call time so a quick
+  // view switch cannot save the wrong mode's config.
+  let persistTimer=null;
+  function persist(){
+    const m=currentMode();
+    clearTimeout(persistTimer);
+    persistTimer=setTimeout(()=>{ persistTimer=null; send({type:'updateConfig', mode:m, config:currentConfig(m)}); }, 250);
+  }
 
   function viewClicker(){
     if(state.device==='keyboard') return viewKeyboard();
@@ -820,6 +824,9 @@
     return { combo:k.combo||'Space', intervalMs: intervalMs>0?intervalMs:1000, repeat:k.repeat, times:Math.round(Math.max(1,+k.times||1)) };
   }
   function beginKeyCapture(btn){
+    // Already capturing on this keycap: a second click must not re-snapshot
+    // the "press a key" prompt as the restore label.
+    if(btn.classList.contains('capturing')) return;
     if(keyCaptureHandler){ document.removeEventListener('keydown', keyCaptureHandler, true); keyCaptureHandler=null; }
     const prev=btn.innerHTML;
     btn.textContent='press a key…'; btn.classList.add('capturing');
@@ -1536,7 +1543,9 @@
   function applyConfig(mode, cfg){
     if(!cfg) return;
     if(mode==='clicker'){
-      const c=state.clicker, total=Math.max(0, cfg.intervalMs|0);
+      // Math.round, not |0: bitwise ops wrap at 2^31, corrupting the restored
+      // form for intervals over ~24.8 days.
+      const c=state.clicker, total=Math.max(0, Math.round(+cfg.intervalMs||0));
       c.ms = total%1000;
       const totalSec=Math.floor(total/1000);
       c.sec = totalSec%60;
@@ -1546,15 +1555,15 @@
       c.button = cfg.button ? cfg.button.charAt(0).toUpperCase()+cfg.button.slice(1) : c.button;
       c.type = cfg.clickType==='double' ? 'Double' : 'Single';
       c.repeat = cfg.repeat==='times' ? 'times' : 'until';
-      c.times = cfg.times|0;
+      c.times = Math.round(+cfg.times||0);
       c.pos = cfg.position==='fixed' ? 'pick' : 'current';
-      c.x = cfg.x|0; c.y = cfg.y|0;
-      if(cfg.rate)     c.rate = Math.max(1, cfg.rate|0);
+      c.x = Math.round(+cfg.x||0); c.y = Math.round(+cfg.y||0);
+      if(cfg.rate)     c.rate = Math.max(1, Math.round(+cfg.rate||0));
       if(cfg.rateUnit) c.rateUnit = cfg.rateUnit==='second' ? 'second' : 'minute';
     } else if(mode==='jiggler'){
       const j=state.jiggler;
-      j.secs = cfg.intervalSec|0;
-      j.dist = cfg.distancePx|0;
+      j.secs = Math.round(+cfg.intervalSec||0);
+      j.dist = Math.round(+cfg.distancePx||0);
       j.mode = cfg.mode==='visible' ? 'Visible' : 'Zen';
       j.wake = !!cfg.keepAwake;
       j.idleOnly = !!cfg.idleOnly;
@@ -1563,20 +1572,20 @@
       state.wakelock.keepSystem  = !!cfg.keepSystemAwake;
       if(state.cat==='wakelock') viewWakeLock();
     } else if(mode==='antiAFK'){
-      state.antiafk.secs = cfg.intervalSec|0;
-      state.antiafk.dist = cfg.distancePx|0;
+      state.antiafk.secs = Math.round(+cfg.intervalSec||0);
+      state.antiafk.dist = Math.round(+cfg.distancePx||0);
       state.antiafk.keepAwake = !!cfg.keepAwake;
       if(state.cat==='antiafk') viewAntiAFK();
     } else if(mode==='keyboard'){
-      const k=state.keyboard, total=Math.max(0, cfg.intervalMs|0);
+      const k=state.keyboard, total=Math.max(0, Math.round(+cfg.intervalMs||0));
       k.ms = total%1000; const ts=Math.floor(total/1000); k.sec=ts%60; const tm=Math.floor(ts/60); k.min=tm%60; k.hrs=Math.floor(tm/60);
       k.combo = cfg.combo || 'Space';
       k.repeat = cfg.repeat==='times' ? 'times' : 'until';
-      k.times = (cfg.times|0) || 50;
+      k.times = Math.round(+cfg.times||0) || 50;
       if(state.cat==='clicker' && state.device==='keyboard') viewKeyboard();
     } else if(mode==='recorder'){
       state.recorder.repeat = cfg.repeat==='times' ? 'times' : 'until';
-      state.recorder.times = (cfg.times|0) || 1;
+      state.recorder.times = Math.round(+cfg.times||0) || 1;
     }
     if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
     if(state.cat===mode && views[mode]) views[mode](); // re-render if showing this mode
@@ -1593,8 +1602,14 @@
   // must not yank the view the user is looking at.
   let lastModeRestored = false;
 
+  let prefsApplied = false;
   function applyPrefs(p){
     if(!p) return;
+    // Re-render only what a changed pref actually affects. Prefs broadcasts
+    // arrive for unrelated records too (for example the other surface noting
+    // lastMode), and an unconditional rebuild yanks the form mid-use.
+    const first = !prefsApplied; prefsApplied = true;
+    const prevSkin = state.prefs.skin, prevMode = state.prefs.interfaceMode, prevDevice = state.device;
     state.prefs.launchAtLogin = !!p.launchAtLogin;
     state.prefs.menuBarOnly   = !!p.menuBarOnly;
     state.prefs.soundOnClick  = !!p.soundOnClick;
@@ -1613,14 +1628,17 @@
       }
     }
     applySkin(state.prefs.skin);
-    if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    if(state.surface==='menubar'){
+      if(first){ viewMenubar(); applyBanner(); }
+      return;
+    }
     if(state.cat==='more') viewMore();
     state.device = p.device || 'mouse';
     const dv=document.getElementById('deviceValue'); if(dv) dv.textContent = state.device==='keyboard' ? 'Keyboard' : 'Mouse';
     const dm=document.getElementById('deviceMenu');
     if(dm) dm.querySelectorAll('li').forEach(li=>li.classList.toggle('on', li.dataset.value===state.device));
-    if(state.cat==='clicker'){ applyClickerTitle(); views.clicker(); applyBanner(); }
-    applyMode(state.prefs.interfaceMode);
+    if(state.cat==='clicker' && (first || prevDevice!==state.device || prevSkin!==state.prefs.skin)){ applyClickerTitle(); views.clicker(); applyBanner(); }
+    if(first || prevMode!==state.prefs.interfaceMode) applyMode(state.prefs.interfaceMode);
   }
 
   function applyHotkeys(bindings){
