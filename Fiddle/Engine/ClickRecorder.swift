@@ -95,6 +95,9 @@ final class ClickRecorder {
         if let source { CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes) }
         tap = nil
         source = nil
+        // Hand the buffer to the caller and drop it here, so a later stop()
+        // cannot return a recording the caller already consumed or cleared.
+        defer { events = [] }
         return events
     }
 

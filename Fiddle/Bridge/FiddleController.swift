@@ -572,6 +572,13 @@ final class FiddleController {
     }
 
     private func endRecording() {
+        // A recordStop that arrives while nothing is recording must not touch
+        // the saved recording; the recorder's buffer could otherwise resurrect
+        // a recording the user already cleared.
+        guard clickRecorder.isRecording else {
+            emitRecording()
+            return
+        }
         let events = clickRecorder.stop()
         store.setRecording(events)
         logActivity("Recording saved (\(events.count) steps)")

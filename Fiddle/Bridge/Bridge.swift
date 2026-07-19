@@ -8,6 +8,7 @@
 //  other command is forwarded to the FiddleController.
 //
 
+import AppKit
 import Foundation
 import WebKit
 import os
@@ -126,5 +127,26 @@ extension FiddleBridge: WKScriptMessageHandler {
 extension FiddleBridge: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         host?.webViewDidLoad(webView)
+    }
+
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        // The UI is a bundled file and must stay that way: the "fiddle" script
+        // message handler drives input synthesis, so letting the web view
+        // navigate to remote content would hand that bridge to a remote page.
+        // Web links open in the user's browser instead.
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+        if url.isFileURL || url.scheme == "about" {
+            decisionHandler(.allow)
+            return
+        }
+        if url.scheme == "http" || url.scheme == "https" {
+            NSWorkspace.shared.open(url)
+        }
+        decisionHandler(.cancel)
     }
 }

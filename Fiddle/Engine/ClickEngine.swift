@@ -117,6 +117,8 @@ final class ClickEngine {
     private var timer: DispatchSourceTimer?
     private var runState: ClickRunState?
     private var running = false
+    /// Uptime of the last sound-hook hop; only touched on `queue`.
+    private var lastSoundNanos: UInt64 = 0
 
     /// Called on the main actor when a bounded ("repeat N times") run completes.
     var onFinished: (@MainActor () -> Void)?
@@ -171,7 +173,16 @@ final class ClickEngine {
         guard running, var state = runState else { return }
         let point = state.targetPoint ?? poster.currentLocation()
         poster.postClick(button: state.config.button, clickType: state.config.clickType, at: point)
-        if let onClick { Task { @MainActor in onClick() } }
+        // The sound hook hops to the main actor per click; at millisecond
+        // intervals that floods it with tasks. Anything faster than ~20 sounds
+        // a second is inaudible as separate ticks anyway, so coalesce.
+        if let onClick {
+            let now = DispatchTime.now().uptimeNanoseconds
+            if now &- lastSoundNanos >= 50_000_000 {
+                lastSoundNanos = now
+                Task { @MainActor in onClick() }
+            }
+        }
         let shouldContinue = state.recordClick()
         runState = state
         guard !shouldContinue else { return }
