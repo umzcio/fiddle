@@ -38,6 +38,12 @@ final class PositionPicker {
                     return Unmanaged.passUnretained(event)
                 }
                 guard let refcon else { return Unmanaged.passUnretained(event) }
+                // Ignore fiddle's own synthesized clicks: with the clicker
+                // running, one of its posts could otherwise satisfy the pick
+                // instead of the user's click.
+                if event.getIntegerValueField(.eventSourceUserData) == SyntheticEvents.userDataTag {
+                    return Unmanaged.passUnretained(event)
+                }
                 let picker = Unmanaged<PositionPicker>.fromOpaque(refcon).takeUnretainedValue()
                 let location = event.location
                 DispatchQueue.main.async {
