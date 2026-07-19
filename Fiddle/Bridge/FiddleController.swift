@@ -70,6 +70,7 @@ final class FiddleController {
 
     init(store: SettingsStore = SettingsStore()) {
         self.store = store
+        self.lastMode = AutomationMode(rawValue: store.settings.prefs.lastMode) ?? .clicker
         // The !isRunning guard drops stale completions: a bounded run's
         // finished Task can land on the main actor after a stop+restart of the
         // same mode, and must not flip the fresh run's status to idle.
@@ -153,6 +154,11 @@ final class FiddleController {
         case ("menuBarOnly", .bool(let b)):   NSApp.setActivationPolicy(b ? .accessory : .regular)
         case ("soundOnClick", _):             updateClickSoundHook()
         case ("skin", .string(let s)):        menuState?.skin = s
+        case ("lastMode", .string(let s)):
+            // Keep the hotkey toggle aimed at the mode showing in the UI,
+            // even before anything has been started this session. Unknown
+            // strings keep the current mode.
+            lastMode = AutomationMode(rawValue: s) ?? lastMode
         default: break
         }
     }
@@ -164,6 +170,14 @@ final class FiddleController {
     private func stopEngines() {
         clickEngine.stop(); jiggleEngine.stop(); wakeLockEngine.stop()
         antiAFKEngine.stop(); playbackEngine.stop(); keyEngine.stop()
+    }
+
+    /// Update the last-used mode and persist it so both surfaces reopen on it.
+    private func setLastMode(_ mode: AutomationMode) {
+        lastMode = mode
+        if store.settings.prefs.lastMode != mode.rawValue {
+            store.setPref("lastMode", .string(mode.rawValue))
+        }
     }
 
     private func start(mode: AutomationMode, config: Config) {
@@ -193,12 +207,12 @@ final class FiddleController {
                 return
             }
             clickEngine.start(config: clickerConfig)
-            lastMode = .clicker
+            setLastMode(.clicker)
             setStatus(.running)
         case .jiggler:
             guard case .jiggler(let jigglerConfig) = config else { return }
             jiggleEngine.start(config: jigglerConfig)
-            lastMode = .jiggler
+            setLastMode(.jiggler)
             setStatus(.running)
         case .wakeLock:
             guard case .wakeLock(let wl) = config else { return }
@@ -208,12 +222,12 @@ final class FiddleController {
                 return
             }
             wakeLockEngine.start(config: wl)
-            lastMode = .wakeLock
+            setLastMode(.wakeLock)
             setStatus(.running)
         case .antiAFK:
             guard case .antiAFK(let a) = config else { return }
             antiAFKEngine.start(config: a)
-            lastMode = .antiAFK
+            setLastMode(.antiAFK)
             setStatus(.running)
         case .recorder:
             // Playback synthesizes clicks, so it needs Accessibility too.
@@ -233,7 +247,7 @@ final class FiddleController {
                 return
             }
             playbackEngine.start(events: events, config: recorderConfig)
-            lastMode = .recorder
+            setLastMode(.recorder)
             setStatus(.running)
         case .macro:
             guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
@@ -256,7 +270,7 @@ final class FiddleController {
                 return
             }
             playbackEngine.start(events: events, config: RecorderConfig(repeat: macroConfig.repeat, times: macroConfig.times))
-            lastMode = .macro
+            setLastMode(.macro)
             setStatus(.running)
         case .keyboard:
             guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
@@ -272,7 +286,7 @@ final class FiddleController {
             keyEngine.start(keyCode: CGKeyCode(shortcut.carbonKeyCode),
                             flags: KeyboardSynthesis.flags(from: shortcut.modifiers),
                             intervalMs: kb.intervalMs, repeat: kb.repeat, times: kb.times)
-            lastMode = .keyboard
+            setLastMode(.keyboard)
             setStatus(.running)
         }
     }
@@ -485,7 +499,7 @@ final class FiddleController {
     /// uses (initial state, profile apply, live pref edits).
     private func prefsEvent() -> Event {
         let p = store.settings.prefs
-        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode)
+        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode, lastMode: p.lastMode)
     }
 
     private func config(for mode: AutomationMode) -> Config {

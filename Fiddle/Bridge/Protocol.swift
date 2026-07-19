@@ -256,7 +256,7 @@ enum Event {
     /// state (sent on `ready`). The JS half mirrors this as `applyConfig`.
     case config(mode: AutomationMode, config: Config)
     /// Pushes saved app preferences into the web UI (sent on `ready`).
-    case prefs(launchAtLogin: Bool, menuBarOnly: Bool, soundOnClick: Bool, skin: String, device: String, interfaceMode: String)
+    case prefs(launchAtLogin: Bool, menuBarOnly: Bool, soundOnClick: Bool, skin: String, device: String, interfaceMode: String, lastMode: String)
     /// Pushes the current global-hotkey bindings to the web UI so the keycaps
     /// reflect persisted state. Keys are HotkeyAction raw values; values are
     /// combo token strings (see HotkeyCombo). Sent on `ready` and after each
@@ -275,7 +275,7 @@ enum Event {
 
 extension Event: Encodable {
     private enum Keys: String, CodingKey {
-        case type, value, accessibility, inputMonitoring, x, y, action, message, mode, config, launchAtLogin, menuBarOnly, soundOnClick, bindings, skin, active, steps, list, device, level, interfaceMode
+        case type, value, accessibility, inputMonitoring, x, y, action, message, mode, config, launchAtLogin, menuBarOnly, soundOnClick, bindings, skin, active, steps, list, device, level, interfaceMode, lastMode
     }
 
     func encode(to encoder: Encoder) throws {
@@ -312,7 +312,7 @@ extension Event: Encodable {
             case .keyboard(let k):              try c.encode(k, forKey: .config)
             }
 
-        case .prefs(let launch, let menuBar, let sound, let skin, let device, let interfaceMode):
+        case .prefs(let launch, let menuBar, let sound, let skin, let device, let interfaceMode, let lastMode):
             try c.encode("prefs", forKey: .type)
             try c.encode(launch, forKey: .launchAtLogin)
             try c.encode(menuBar, forKey: .menuBarOnly)
@@ -320,6 +320,7 @@ extension Event: Encodable {
             try c.encode(skin, forKey: .skin)
             try c.encode(device, forKey: .device)
             try c.encode(interfaceMode, forKey: .interfaceMode)
+            try c.encode(lastMode, forKey: .lastMode)
 
         case .hotkeys(let bindings):
             try c.encode("hotkeys", forKey: .type)

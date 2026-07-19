@@ -329,4 +329,28 @@ final class SettingsTests: XCTestCase {
         store.setPref("interfaceMode", .string("simple"))
         XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.interfaceMode, "simple")
     }
+
+    func testDefaultLastModeIsClicker() {
+        XCTAssertEqual(Settings.default.prefs.lastMode, "clicker")
+    }
+
+    func testLegacyPrefsDefaultLastMode() throws {
+        let legacy = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true},
+         "prefs":{"launchAtLogin":false,"menuBarOnly":false,"soundOnClick":false,"skin":"red","device":"mouse","interfaceMode":"advanced"}}
+        """
+        let s = try JSONDecoder().decode(Settings.self, from: Data(legacy.utf8))
+        XCTAssertEqual(s.prefs.lastMode, "clicker")
+    }
+
+    @MainActor
+    func testSetPrefLastModePersists() {
+        let suite = "fiddle.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SettingsStore(defaults: defaults)
+        store.setPref("lastMode", .string("jiggler"))
+        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.lastMode, "jiggler")
+    }
 }

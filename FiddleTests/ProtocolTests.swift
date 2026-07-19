@@ -50,7 +50,7 @@ final class ProtocolTests: XCTestCase {
     }
 
     func testEncodePrefsEvent() throws {
-        let js = try Bridge.script(for: .prefs(launchAtLogin: true, menuBarOnly: false, soundOnClick: true, skin: "cobalt", device: "keyboard", interfaceMode: "simple"))
+        let js = try Bridge.script(for: .prefs(launchAtLogin: true, menuBarOnly: false, soundOnClick: true, skin: "cobalt", device: "keyboard", interfaceMode: "simple", lastMode: "jiggler"))
         XCTAssertTrue(js.contains("\"type\":\"prefs\""))
         XCTAssertTrue(js.contains("\"launchAtLogin\":true"))
         XCTAssertTrue(js.contains("\"menuBarOnly\":false"))
@@ -58,6 +58,7 @@ final class ProtocolTests: XCTestCase {
         XCTAssertTrue(js.contains("\"skin\":\"cobalt\""))
         XCTAssertTrue(js.contains("\"device\":\"keyboard\""))
         XCTAssertTrue(js.contains("\"interfaceMode\":\"simple\""))
+        XCTAssertTrue(js.contains("\"lastMode\":\"jiggler\""))
     }
 
     func testDecodeWindowFit() throws {

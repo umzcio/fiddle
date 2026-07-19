@@ -46,15 +46,17 @@ struct AppPrefs: Codable, Equatable {
     var skin: String
     var device: String
     var interfaceMode: String
+    var lastMode: String
 
-    static let `default` = AppPrefs(menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced")
+    static let `default` = AppPrefs(menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced", lastMode: "clicker")
 }
 
 extension AppPrefs {
-    private enum CodingKeys: String, CodingKey { case menuBarOnly, soundOnClick, skin, device, interfaceMode }
+    private enum CodingKeys: String, CodingKey { case menuBarOnly, soundOnClick, skin, device, interfaceMode, lastMode }
 
-    // Tolerate prefs saved before `skin`, `device`, or `interfaceMode` existed.
-    // Older blobs also contain a `launchAtLogin` key; it is simply ignored.
+    // Tolerate prefs saved before `skin`, `device`, `interfaceMode`, or
+    // `lastMode` existed. Older blobs also contain a `launchAtLogin` key;
+    // it is simply ignored.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         menuBarOnly   = try c.decodeIfPresent(Bool.self, forKey: .menuBarOnly) ?? false
@@ -62,6 +64,7 @@ extension AppPrefs {
         skin          = try c.decodeIfPresent(String.self, forKey: .skin) ?? "red"
         device        = try c.decodeIfPresent(String.self, forKey: .device) ?? "mouse"
         interfaceMode = try c.decodeIfPresent(String.self, forKey: .interfaceMode) ?? "advanced"
+        lastMode      = try c.decodeIfPresent(String.self, forKey: .lastMode) ?? "clicker"
     }
 }
 
@@ -168,6 +171,7 @@ final class SettingsStore {
         case ("skin", .string(let s)):           settings.prefs.skin = s
         case ("device", .string(let s)):         settings.prefs.device = s
         case ("interfaceMode", .string(let s)):  settings.prefs.interfaceMode = s
+        case ("lastMode", .string(let s)):       settings.prefs.lastMode = s
         default: return
         }
         save()

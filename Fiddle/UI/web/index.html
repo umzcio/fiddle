@@ -728,7 +728,7 @@
         <div class="task-ico">${t[1]}</div>
         <div><div class="task-t">${t[2]}</div><div class="task-s">${t[3]}</div></div>
       </div>`).join('');
-    content.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>selectCat(el.dataset.go));
+    content.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>selectCat(el.dataset.go, true));
   }
 
   // Persist the current mode's config immediately, so any start path (global
@@ -1266,7 +1266,7 @@
       `<div class="group"><h4>Run</h4>
         <div class="row"><span class="hint">Press the flame to ${tab==='click'?'click at the cursor':'jiggle'}, again to stop. Or use the panic key.</span></div>
       </div>`;
-    seg('simpleTab', v=>{ state.simpleTab=v; viewSimple(); applyBanner(); });
+    seg('simpleTab', v=>{ state.simpleTab=v; send({type:'setPref', key:'lastMode', value: v==='jiggle'?'jiggler':'clicker'}); viewSimple(); applyBanner(); });
     if(tab==='click'){ bind('sc-rate', v=>{c.rate=Math.max(1,+v||1); persist();}); bindSel('sc-unit', v=>{c.rateUnit=v; persist();}); }
     else { bind('sj-s', v=>{j.secs=+v||0; persist();}); }
   }
@@ -1300,7 +1300,7 @@
         <div class="row"><button class="btn-reset" id="mOpen">Open fiddle</button>
           <button class="btn-reset" id="mQuit">Quit</button></div>
       </div>`;
-    seg('mTab', v=>{ state.simpleTab=v; viewMenubar(); applyBanner(); });
+    seg('mTab', v=>{ state.simpleTab=v; send({type:'setPref', key:'lastMode', value: v==='jiggle'?'jiggler':'clicker'}); viewMenubar(); applyBanner(); });
     if(tab==='click'){ bind('mc-rate', v=>{c.rate=Math.max(1,+v||1); persist();}); bindSel('mc-unit', v=>{c.rateUnit=v; persist();}); }
     else { bind('mj-s', v=>{j.secs=+v||0; persist();}); }
     document.getElementById('mOpen').onclick=()=>send({type:'window', action:'showWindow'});
@@ -1353,10 +1353,16 @@
     document.getElementById('catSub').innerHTML   = state.device==='keyboard' ? 'Press a key on a fixed interval' : 'Configure automated clicking';
   }
 
-  function selectCat(cat){
+  function selectCat(cat, fromUser){
     if(typeof endCapture==='function') endCapture(true);
     if(keyCaptureHandler){ document.removeEventListener('keydown', keyCaptureHandler, true); keyCaptureHandler=null; }
     state.cat=cat;
+    if(fromUser){
+      // Only real automation categories count as a "last used" mode; home,
+      // hotkeys, more, profiles and activity are navigation, not modes.
+      const catMode={clicker:'clicker', jiggler:'jiggler', wakelock:'wakeLock', antiafk:'antiAFK', recorder:'recorder', sequencer:'macro', macro:'macro'}[cat];
+      if(catMode) send({type:'setPref', key:'lastMode', value: cat==='clicker'&&state.device==='keyboard' ? 'keyboard' : catMode});
+    }
     document.querySelectorAll('.cat').forEach(c=>c.classList.toggle('active',c.dataset.cat===cat));
     document.querySelectorAll('.app').forEach(a=>a.classList.toggle('on',a.dataset.cat===cat));
     document.getElementById('catTitle').innerHTML=titles[cat][0];
@@ -1366,8 +1372,8 @@
     applyBanner(); // re-add the permission banner; views[cat]() replaced #content
   }
 
-  document.querySelectorAll('.cat[data-cat]').forEach(c=>c.onclick=()=>selectCat(c.dataset.cat));
-  document.querySelectorAll('.app[data-cat]').forEach(a=>a.onclick=()=>selectCat(a.dataset.cat));
+  document.querySelectorAll('.cat[data-cat]').forEach(c=>c.onclick=()=>selectCat(c.dataset.cat, true));
+  document.querySelectorAll('.app[data-cat]').forEach(a=>a.onclick=()=>selectCat(a.dataset.cat, true));
 
   // ---------- start / stop (engine driven) ----------
   const btn=document.getElementById('startBtn'),
@@ -1490,6 +1496,11 @@
     if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
   }
 
+  // The saved last-used mode may move the visible view only once, at boot.
+  // Later prefs broadcasts (profile applies, edits on the other surface)
+  // must not yank the view the user is looking at.
+  let lastModeRestored = false;
+
   function applyPrefs(p){
     if(!p) return;
     state.prefs.launchAtLogin = !!p.launchAtLogin;
@@ -1497,6 +1508,18 @@
     state.prefs.soundOnClick  = !!p.soundOnClick;
     state.prefs.skin = p.skin || 'red';
     state.prefs.interfaceMode = p.interfaceMode || 'advanced';
+    if(!lastModeRestored){
+      lastModeRestored = true;
+      const lm = p.lastMode || 'clicker';
+      state.simpleTab = lm==='jiggler' ? 'jiggle' : 'click';
+      if(state.surface!=='menubar'){
+        // keyboard lives under the clicker category (the Device pill,
+        // restored separately from prefs.device, flips it). An unknown
+        // value maps to nothing and leaves the default category alone.
+        const cat=({clicker:'clicker', jiggler:'jiggler', wakeLock:'wakelock', antiAFK:'antiafk', recorder:'recorder', macro:'macro', keyboard:'clicker'})[lm];
+        if(cat) state.cat = cat;
+      }
+    }
     applySkin(state.prefs.skin);
     if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
     if(state.cat==='more') viewMore();
