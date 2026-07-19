@@ -1642,6 +1642,8 @@
     // Show the real app version (injected by the native bridge).
     const ver=document.getElementById('aboutVer');
     if(ver && window.__fiddleVersion) ver.textContent = window.__fiddleVersion;
+    const footVer=document.querySelector('.footer .ver');
+    if(footVer && window.__fiddleVersion) footVer.textContent = 'fiddle ' + window.__fiddleVersion + ' · for macOS';
     const modeToggle=document.getElementById('modeToggle');
     if(modeToggle) modeToggle.querySelectorAll('button').forEach(b=>b.onclick=()=>setMode(b.dataset.v));
   })();
