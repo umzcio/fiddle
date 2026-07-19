@@ -485,7 +485,7 @@ final class FiddleController {
     /// uses (initial state, profile apply, live pref edits).
     private func prefsEvent() -> Event {
         let p = store.settings.prefs
-        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode)
+        return .prefs(launchAtLogin: LoginItem.isEnabled, menuBarOnly: p.menuBarOnly, soundOnClick: p.soundOnClick, skin: p.skin, device: p.device, interfaceMode: p.interfaceMode, lastMode: p.lastMode)
     }
 
     private func config(for mode: AutomationMode) -> Config {
