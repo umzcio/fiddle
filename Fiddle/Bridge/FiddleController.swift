@@ -210,6 +210,14 @@ final class FiddleController {
             setLastMode(.clicker)
             setStatus(.running)
         case .jiggler:
+            // Nudges are posted as real mouseMoved events, which macOS silently
+            // discards without Accessibility; without this guard the LED shows
+            // Running while the cursor never moves.
+            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
+                emitPermissions()
+                broadcast(.error(message: "Accessibility permission is required to move the mouse."))
+                return
+            }
             guard case .jiggler(let jigglerConfig) = config else { return }
             jiggleEngine.start(config: jigglerConfig)
             setLastMode(.jiggler)
@@ -225,6 +233,11 @@ final class FiddleController {
             setLastMode(.wakeLock)
             setStatus(.running)
         case .antiAFK:
+            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
+                emitPermissions()
+                broadcast(.error(message: "Accessibility permission is required to move the mouse."))
+                return
+            }
             guard case .antiAFK(let a) = config else { return }
             antiAFKEngine.start(config: a)
             setLastMode(.antiAFK)
@@ -270,6 +283,11 @@ final class FiddleController {
                 return
             }
             playbackEngine.start(events: events, config: RecorderConfig(repeat: macroConfig.repeat, times: macroConfig.times))
+            // Remember which macro ran so the Start/Stop hotkey and menu-bar
+            // toggle can replay it; config(for: .macro) reads this back.
+            if store.settings.prefs.lastMacroId != macroConfig.macroId {
+                store.setPref("lastMacroId", .string(macroConfig.macroId))
+            }
             setLastMode(.macro)
             setStatus(.running)
         case .keyboard:
@@ -421,8 +439,8 @@ final class FiddleController {
             clicker.position = .fixed
             store.setClicker(clicker)
         }
+        broadcast(.positionPicked(x: x, y: y, purpose: pickPurpose))
         pickPurpose = nil
-        broadcast(.positionPicked(x: x, y: y))
         logActivity("Position picked (\(x), \(y))")
     }
 
@@ -442,7 +460,7 @@ final class FiddleController {
         // Engines that post events silently no-op once Accessibility is
         // revoked: the timer keeps firing and the LED shows Running while
         // nothing happens. Stop honestly instead.
-        let postsEvents: Set<AutomationMode> = [.clicker, .recorder, .macro, .keyboard]
+        let postsEvents: Set<AutomationMode> = [.clicker, .jiggler, .antiAFK, .recorder, .macro, .keyboard]
         if status == .running, postsEvents.contains(lastMode), !permissions.accessibilityTrusted() {
             stopAll()
             broadcast(.error(message: "Accessibility permission was revoked, so automation was stopped."))
@@ -473,6 +491,10 @@ final class FiddleController {
         emitRecording(to: sink)
         emitMacros(to: sink)
         emitProfiles(to: sink)
+        // A surface can boot while an engine is already running (the popover's
+        // web view is created on first open; hotkeys work before that). Without
+        // this it shows Idle and its flame would restart instead of stop.
+        send(.status(status), to: sink)
         if store.didResetToDefaults {
             store.acknowledgeReset()
             send(.error(message: "Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key."), to: sink)
@@ -509,7 +531,7 @@ final class FiddleController {
         case .wakeLock: return .wakeLock(store.settings.wakeLock)
         case .antiAFK:  return .antiAFK(store.settings.antiAFK)
         case .recorder: return .recorder(store.settings.recorder)
-        case .macro:    return .macro(MacroConfig(macroId: "", repeat: .until, times: 1))
+        case .macro:    return .macro(MacroConfig(macroId: store.settings.prefs.lastMacroId, repeat: .until, times: 1))
         case .keyboard: return .keyboard(store.settings.keyboard)
         }
     }

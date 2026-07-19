@@ -47,12 +47,15 @@ struct AppPrefs: Codable, Equatable {
     var device: String
     var interfaceMode: String
     var lastMode: String
+    /// Id of the macro most recently played, so the Start/Stop hotkey can
+    /// replay it. Empty until a macro has been played. Not exposed to the UI.
+    var lastMacroId: String
 
-    static let `default` = AppPrefs(menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced", lastMode: "clicker")
+    static let `default` = AppPrefs(menuBarOnly: false, soundOnClick: false, skin: "red", device: "mouse", interfaceMode: "advanced", lastMode: "clicker", lastMacroId: "")
 }
 
 extension AppPrefs {
-    private enum CodingKeys: String, CodingKey { case menuBarOnly, soundOnClick, skin, device, interfaceMode, lastMode }
+    private enum CodingKeys: String, CodingKey { case menuBarOnly, soundOnClick, skin, device, interfaceMode, lastMode, lastMacroId }
 
     // Tolerate prefs saved before `skin`, `device`, `interfaceMode`, or
     // `lastMode` existed. Older blobs also contain a `launchAtLogin` key;
@@ -65,6 +68,7 @@ extension AppPrefs {
         device        = try c.decodeIfPresent(String.self, forKey: .device) ?? "mouse"
         interfaceMode = try c.decodeIfPresent(String.self, forKey: .interfaceMode) ?? "advanced"
         lastMode      = try c.decodeIfPresent(String.self, forKey: .lastMode) ?? "clicker"
+        lastMacroId   = try c.decodeIfPresent(String.self, forKey: .lastMacroId) ?? ""
     }
 }
 
@@ -172,6 +176,7 @@ final class SettingsStore {
         case ("device", .string(let s)):         settings.prefs.device = s
         case ("interfaceMode", .string(let s)):  settings.prefs.interfaceMode = s
         case ("lastMode", .string(let s)):       settings.prefs.lastMode = s
+        case ("lastMacroId", .string(let s)):    settings.prefs.lastMacroId = s
         default: return
         }
         save()

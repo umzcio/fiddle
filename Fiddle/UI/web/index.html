@@ -671,26 +671,32 @@
     // second/minute); Advanced uses the explicit hrs/min/sec/ms interval.
     const rateMode = state.surface==='menubar' || state.prefs.interfaceMode==='simple';
     const rate = Math.max(1, +c.rate||1);
+    // Swift decodes every numeric here as Int; a fractional value fails the
+    // decode and the whole command is dropped, so round at the boundary.
     const intervalMs = rateMode
-      ? Math.round((c.rateUnit==='minute' ? 60000 : 1000) / rate)
-      : (((+c.hrs||0)*60 + (+c.min||0))*60 + (+c.sec||0))*1000 + (+c.ms||0);
+      ? Math.max(1, Math.round((c.rateUnit==='minute' ? 60000 : 1000) / rate))
+      : Math.round((((+c.hrs||0)*60 + (+c.min||0))*60 + (+c.sec||0))*1000 + (+c.ms||0));
     return {
-      intervalMs: Math.max(1, intervalMs),
+      // All-blank interval fields mean "unset", not "as fast as possible";
+      // fall back to the 100ms default instead of a 1ms machine gun.
+      intervalMs: intervalMs > 0 ? intervalMs : 100,
       button: c.button.toLowerCase(),
       clickType: c.type.toLowerCase(),
       repeat: rateMode ? 'until' : c.repeat,
-      times: Math.max(1, +c.times||1),
-      position: c.pos === 'pick' ? 'fixed' : 'current',
-      x: +c.x||0, y: +c.y||0,
-      rate: rate,
+      times: Math.round(Math.max(1, +c.times||1)),
+      // Simple mode and the popover have no position controls and promise
+      // clicks at the cursor; never reuse a fixed position picked in Advanced.
+      position: (!rateMode && c.pos === 'pick') ? 'fixed' : 'current',
+      x: Math.round(+c.x||0), y: Math.round(+c.y||0),
+      rate: Math.round(rate),
       rateUnit: c.rateUnit==='second' ? 'second' : 'minute',
     };
   }
   function jigglerConfig(){
     const j = state.jiggler;
     return {
-      intervalSec: Math.max(1, +j.secs||1),
-      distancePx: Math.max(1, +j.dist||1),
+      intervalSec: Math.round(Math.max(1, +j.secs||1)),
+      distancePx: Math.round(Math.max(1, +j.dist||1)),
       mode: j.mode.toLowerCase(),
       keepAwake: !!j.wake,
       idleOnly: !!j.idleOnly,
@@ -705,11 +711,11 @@
   function currentConfig(m){
     if(m==='jiggler') return jigglerConfig();
     if(m==='wakeLock') return { keepDisplayAwake: !!state.wakelock.keepDisplay, keepSystemAwake: !!state.wakelock.keepSystem };
-    if(m==='antiAFK')  return { intervalSec: Math.max(1, +state.antiafk.secs||1), distancePx: Math.max(1, +state.antiafk.dist||1), keepAwake: !!state.antiafk.keepAwake };
-    if(m==='recorder')  return { repeat: state.recorder.repeat, times: Math.max(1, +state.recorder.times||1) };
+    if(m==='antiAFK')  return { intervalSec: Math.round(Math.max(1, +state.antiafk.secs||1)), distancePx: Math.round(Math.max(1, +state.antiafk.dist||1)), keepAwake: !!state.antiafk.keepAwake };
+    if(m==='recorder')  return { repeat: state.recorder.repeat, times: Math.round(Math.max(1, +state.recorder.times||1)) };
     if(m==='macro'){
       const id = state.selectedMacro || (state.macros[0] && state.macros[0].id) || '';
-      return { macroId:id, repeat: state.macroRepeat.repeat, times: Math.max(1, +state.macroRepeat.times||1) };
+      return { macroId:id, repeat: state.macroRepeat.repeat, times: Math.round(Math.max(1, +state.macroRepeat.times||1)) };
     }
     if(m==='keyboard') return keyboardConfig();
     return clickerConfig();
@@ -794,8 +800,8 @@
 
   function keyboardConfig(){
     const k=state.keyboard;
-    const intervalMs=(((+k.hrs||0)*60+(+k.min||0))*60+(+k.sec||0))*1000+(+k.ms||0);
-    return { combo:k.combo||'Space', intervalMs:Math.max(1,intervalMs), repeat:k.repeat, times:Math.max(1,+k.times||1) };
+    const intervalMs=Math.round((((+k.hrs||0)*60+(+k.min||0))*60+(+k.sec||0))*1000+(+k.ms||0));
+    return { combo:k.combo||'Space', intervalMs: intervalMs>0?intervalMs:1000, repeat:k.repeat, times:Math.round(Math.max(1,+k.times||1)) };
   }
   function beginKeyCapture(btn){
     if(keyCaptureHandler){ document.removeEventListener('keydown', keyCaptureHandler, true); keyCaptureHandler=null; }
@@ -1019,8 +1025,8 @@
     document.getElementById('addStep').onclick=()=>{
       const mm=selectedMacro(); if(!mm) return;
       const s=stepStep(addState.kind);
-      if(addState.kind==='click'){ s.button=addState.button; s.clickType=addState.clickType; s.x=+document.getElementById('addX').value||0; s.y=+document.getElementById('addY').value||0; }
-      else if(addState.kind==='move'){ s.x=+document.getElementById('addX').value||0; s.y=+document.getElementById('addY').value||0; }
+      if(addState.kind==='click'){ s.button=addState.button; s.clickType=addState.clickType; s.x=Math.round(+document.getElementById('addX').value||0); s.y=Math.round(+document.getElementById('addY').value||0); }
+      else if(addState.kind==='move'){ s.x=Math.round(+document.getElementById('addX').value||0); s.y=Math.round(+document.getElementById('addY').value||0); }
       else { s.ms=+document.getElementById('addMs').value||0; }
       mm.steps.push(s); saveMacros(); viewSequencer(); applyBanner();
     };
@@ -1421,13 +1427,19 @@
     if(host.firstChild !== bar) host.insertBefore(bar, host.firstChild);
   }
 
-  function onPositionPicked(x,y){
-    if(state.pendingPick){
-      state.pendingPick=null;
-      const ax=document.getElementById('addX'), ay=document.getElementById('addY');
-      if(ax) ax.value=x; if(ay) ay.value=y;
+  function onPositionPicked(x,y,purpose){
+    if(purpose==='step'){
+      // A sequencer-step pick. Only the surface that asked for it (its
+      // pendingPick is set) applies it; the other surface must not treat a
+      // broadcast step pick as a clicker fixed position.
+      if(state.pendingPick){
+        state.pendingPick=null;
+        const ax=document.getElementById('addX'), ay=document.getElementById('addY');
+        if(ax) ax.value=x; if(ay) ay.value=y;
+      }
       return;
     }
+    state.pendingPick=null;
     const c=state.clicker;
     c.x=x; c.y=y; c.pos='pick';
     if(state.cat==='clicker'){
@@ -1556,7 +1568,7 @@
       switch(e && e.type){
         case 'status':         setStatus(e.value); break;
         case 'permissions':    renderPermissions(e); break;
-        case 'positionPicked': onPositionPicked(e.x, e.y); break;
+        case 'positionPicked': onPositionPicked(e.x, e.y, e.purpose); break;
         case 'config':         applyConfig(e.mode, e.config); break;
         case 'prefs':          applyPrefs(e); break;
         case 'hotkeys':        applyHotkeys(e.bindings); break;
@@ -1612,7 +1624,12 @@
         if(dev === 'mouse' || dev === 'keyboard'){
           state.device = dev;
           send({type:'setPref', key:'device', value:dev});
-          if(state.cat==='clicker'){ applyClickerTitle(); views.clicker(); applyBanner(); }
+          // The device pill changes what the clicker view (and the Start/Stop
+          // hotkey) drives; keep lastMode aimed at what the UI now shows.
+          if(state.cat==='clicker'){
+            send({type:'setPref', key:'lastMode', value: dev==='keyboard' ? 'keyboard' : 'clicker'});
+            applyClickerTitle(); views.clicker(); applyBanner();
+          }
         }
       });
     });

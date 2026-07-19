@@ -250,7 +250,10 @@ extension Command: Decodable {
 enum Event {
     case status(RunStatus)
     case permissions(accessibility: Bool, inputMonitoring: Bool)
-    case positionPicked(x: Int, y: Int)
+    /// `purpose` echoes the `pickPosition` command's purpose (for example
+    /// "step"), so a surface that did not request the pick can tell a
+    /// sequencer-step pick from a clicker-position pick.
+    case positionPicked(x: Int, y: Int, purpose: String?)
     case error(message: String)
     /// Pushes a saved config into the web UI so the controls reflect persisted
     /// state (sent on `ready`). The JS half mirrors this as `applyConfig`.
@@ -275,7 +278,7 @@ enum Event {
 
 extension Event: Encodable {
     private enum Keys: String, CodingKey {
-        case type, value, accessibility, inputMonitoring, x, y, action, message, mode, config, launchAtLogin, menuBarOnly, soundOnClick, bindings, skin, active, steps, list, device, level, interfaceMode, lastMode
+        case type, value, accessibility, inputMonitoring, x, y, action, message, mode, config, launchAtLogin, menuBarOnly, soundOnClick, bindings, skin, active, steps, list, device, level, interfaceMode, lastMode, purpose
     }
 
     func encode(to encoder: Encoder) throws {
@@ -290,10 +293,11 @@ extension Event: Encodable {
             try c.encode(acc, forKey: .accessibility)
             try c.encode(input, forKey: .inputMonitoring)
 
-        case .positionPicked(let x, let y):
+        case .positionPicked(let x, let y, let purpose):
             try c.encode("positionPicked", forKey: .type)
             try c.encode(x, forKey: .x)
             try c.encode(y, forKey: .y)
+            try c.encodeIfPresent(purpose, forKey: .purpose)
 
         case .error(let message):
             try c.encode("error", forKey: .type)
@@ -424,6 +428,14 @@ enum Bridge {
 
     /// Decode a Command from a `WKScriptMessage.body` (typically `[String: Any]`).
     static func decodeCommand(from body: Any) throws -> Command {
+        // JSONSerialization raises an uncatchable ObjC exception (not a Swift
+        // error) for non-object top-level values, so a page posting a bare
+        // string or number would crash the app. Reject those up front.
+        guard JSONSerialization.isValidJSONObject(body) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: [],
+                debugDescription: "postMessage body is not a JSON object"))
+        }
         let data = try JSONSerialization.data(withJSONObject: body)
         return try JSONDecoder().decode(Command.self, from: data)
     }

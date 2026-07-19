@@ -353,4 +353,21 @@ final class SettingsTests: XCTestCase {
         store.setPref("lastMode", .string("jiggler"))
         XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.lastMode, "jiggler")
     }
+
+    func testLastMacroIdDefaultsEmptyAndPersists() {
+        XCTAssertEqual(AppPrefs.default.lastMacroId, "")
+        let suite = "fiddle.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SettingsStore(defaults: defaults)
+        store.setPref("lastMacroId", .string("m42"))
+        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.lastMacroId, "m42")
+    }
+
+    func testLegacyPrefsDefaultLastMacroId() throws {
+        // A prefs blob saved before lastMacroId existed must decode with "".
+        let json = #"{"menuBarOnly":false,"soundOnClick":false,"skin":"red","device":"mouse","interfaceMode":"advanced","lastMode":"clicker"}"#
+        let prefs = try JSONDecoder().decode(AppPrefs.self, from: Data(json.utf8))
+        XCTAssertEqual(prefs.lastMacroId, "")
+    }
 }
