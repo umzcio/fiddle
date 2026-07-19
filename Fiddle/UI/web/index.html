@@ -695,9 +695,7 @@
       clickType: c.type.toLowerCase(),
       repeat: rateMode ? 'until' : c.repeat,
       times: Math.round(Math.max(1, +c.times||1)),
-      // Simple mode and the popover have no position controls and promise
-      // clicks at the cursor; never reuse a fixed position picked in Advanced.
-      position: (!rateMode && c.pos === 'pick') ? 'fixed' : 'current',
+      position: c.pos === 'pick' ? 'fixed' : 'current',
       x: Math.round(+c.x||0), y: Math.round(+c.y||0),
       rate: Math.round(rate),
       rateUnit: c.rateUnit==='second' ? 'second' : 'minute',
@@ -748,20 +746,28 @@
     content.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>selectCat(el.dataset.go, true));
   }
 
-  // Persist the current mode's config immediately, so any start path (global
-  // hotkey, menu bar, the flame) uses what the user actually set rather than the
-  // last-started snapshot. Without this, editing the rate then starting via the
-  // hotkey would run the stale saved interval.
-  // One updateConfig per pause in editing, not per keystroke: every send
-  // re-encodes and rewrites the whole settings blob on the Swift side and
-  // re-syncs the other surface. The mode is captured at call time so a quick
-  // view switch cannot save the wrong mode's config.
-  let persistTimer=null;
+  // Persist the current mode's config so the non-flame start paths (global
+  // hotkey, menu bar) use what the user set. Debounced 250ms per pause in
+  // editing, not per keystroke: every send re-encodes the whole settings blob
+  // on the Swift side and re-syncs the other surface. Consequence: a hotkey
+  // start within 250ms of the last keystroke runs the previous value; the
+  // flame is unaffected (it sends its config inline). Switching modes flushes
+  // the pending edit immediately so it is never dropped.
+  let persistTimer=null, persistMode=null;
+  function flushPersist(){
+    if(!persistTimer) return;
+    clearTimeout(persistTimer);
+    persistTimer=null;
+    send({type:'updateConfig', mode:persistMode, config:currentConfig(persistMode)});
+  }
   function persist(){
     const m=currentMode();
+    if(persistTimer && persistMode!==m) flushPersist();
+    persistMode=m;
     clearTimeout(persistTimer);
     persistTimer=setTimeout(()=>{ persistTimer=null; send({type:'updateConfig', mode:m, config:currentConfig(m)}); }, 250);
   }
+  window.addEventListener('blur', flushPersist);
 
   function viewClicker(){
     if(state.device==='keyboard') return viewKeyboard();
@@ -1050,7 +1056,7 @@
       const s=stepStep(addState.kind);
       if(addState.kind==='click'){ s.button=addState.button; s.clickType=addState.clickType; s.x=Math.round(+document.getElementById('addX').value||0); s.y=Math.round(+document.getElementById('addY').value||0); }
       else if(addState.kind==='move'){ s.x=Math.round(+document.getElementById('addX').value||0); s.y=Math.round(+document.getElementById('addY').value||0); }
-      else { s.ms=+document.getElementById('addMs').value||0; }
+      else { s.ms=Math.round(+document.getElementById('addMs').value||0); }
       mm.steps.push(s); saveMacros(); viewSequencer(); applyBanner();
     };
   }
@@ -1115,9 +1121,12 @@
   function profileId(){ return 'p' + (state.profiles.reduce((n,p)=>Math.max(n, +(p.id||'p0').slice(1)||0),0) + 1); }
   function captureProfile(name){
     return { id:profileId(), name,
+      // Reuse the wire builders so every numeric is rounded the same way a
+      // start/updateConfig payload is; hand-built shapes here leaked
+      // fractional values that failed the Swift Int decode.
       clicker:clickerConfig(), jiggler:jigglerConfig(),
-      wakeLock:{ keepDisplayAwake: !!state.wakelock.keepDisplay, keepSystemAwake: !!state.wakelock.keepSystem },
-      antiAFK:{ intervalSec: Math.max(1,+state.antiafk.secs||1), distancePx: Math.max(1,+state.antiafk.dist||1), keepAwake: !!state.antiafk.keepAwake },
+      wakeLock:currentConfig('wakeLock'),
+      antiAFK:currentConfig('antiAFK'),
       keyboard:keyboardConfig(), device:state.device };
   }
   function viewProfiles(){
@@ -1474,8 +1483,15 @@
 
   // The button only SENDS intent. The glow + LED follow the engine's status event.
   btn.onclick=()=>{
-    if(state.running){ send({type:'stop'}); }
-    else { const m=currentMode(); send({type:'start', mode:m, config:currentConfig(m)}); }
+    if(state.running){ send({type:'stop'}); return; }
+    const m=currentMode();
+    const cfg=currentConfig(m);
+    // Simple mode and the popover have no position controls and promise
+    // clicks at the cursor. Override for this start only; updateConfig and
+    // profiles keep the position the user actually picked, so the override
+    // must not live inside clickerConfig().
+    if(m==='clicker' && (state.surface==='menubar' || state.prefs.interfaceMode==='simple')) cfg.position='current';
+    send({type:'start', mode:m, config:cfg});
   };
 
   function setStatus(value){
@@ -1593,8 +1609,12 @@
 
   // Theme the whole UI by flipping the --ac-* CSS variables via a body attribute.
   function applySkin(name){
-    document.body.dataset.skin = name || 'red';
-    if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    const next = name || 'red';
+    const changed = document.body.dataset.skin !== next;
+    document.body.dataset.skin = next;
+    // Rebuild the popover only when the skin actually changed; otherwise an
+    // unrelated prefs broadcast rebuilds its form mid-use.
+    if(changed && state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
   }
 
   // The saved last-used mode may move the visible view only once, at boot.
