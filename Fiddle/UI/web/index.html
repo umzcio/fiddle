@@ -1078,10 +1078,14 @@
     const m=selectedMacro(); if(!m) return;
     (state.recording||[]).forEach(s=>{
       if(s.delayMs>0) m.steps.push({kind:'wait', button:'left', clickType:'single', x:0, y:0, ms:s.delayMs});
-      if(s.label && s.label.indexOf('click')>=0){
-        const button=s.label.split(' ')[0].toLowerCase();
-        m.steps.push({kind:'click', button:(['left','right','middle'].includes(button)?button:'left'), clickType:'single', x:s.x, y:s.y, ms:0});
-      } else if(s.label && s.label.indexOf('move')>=0){
+      const button=['left','right','middle'].includes(s.button)?s.button:'left';
+      const clickType=s.clickType==='double'?'double':'single';
+      // A press whose release landed elsewhere still becomes a click at the
+      // press point. Dropping it lost the click entirely. The matching
+      // release is skipped so one physical click yields one step.
+      if(s.kind==='click' || s.kind==='press'){
+        m.steps.push({kind:'click', button:button, clickType:clickType, x:s.x, y:s.y, ms:0});
+      } else if(s.kind==='move'){
         m.steps.push({kind:'move', button:'left', clickType:'single', x:s.x, y:s.y, ms:0});
       }
     });

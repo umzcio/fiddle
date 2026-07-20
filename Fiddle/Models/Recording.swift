@@ -47,12 +47,35 @@ struct RecorderConfig: Codable, Equatable {
     var times: Int
 }
 
-/// A display projection of the sequence for the UI step list.
+/// A display projection of the sequence for the UI step list. `label` is the
+/// human-readable text; the typed fields below are what the sequencer's
+/// import reads, so it never has to parse the label.
 struct DisplayStep: Codable, Equatable {
     var label: String
     var x: Int
     var y: Int
     var delayMs: Int
+    /// "click", "press", "release", or "move".
+    var kind: String = "click"
+    var button: MouseButton = .left
+    /// .double when the source events carried a multi-click state.
+    var clickType: ClickType = .single
+}
+
+// MARK: - Lenient decoder
+
+extension DisplayStep {
+    private enum CodingKeys: String, CodingKey { case label, x, y, delayMs, kind, button, clickType }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label     = try c.decodeIfPresent(String.self,      forKey: .label)     ?? ""
+        x         = try c.decodeIfPresent(Int.self,         forKey: .x)         ?? 0
+        y         = try c.decodeIfPresent(Int.self,         forKey: .y)         ?? 0
+        delayMs   = try c.decodeIfPresent(Int.self,         forKey: .delayMs)   ?? 0
+        kind      = try c.decodeIfPresent(String.self,      forKey: .kind)      ?? "click"
+        button    = try c.decodeIfPresent(MouseButton.self,  forKey: .button)    ?? .left
+        clickType = try c.decodeIfPresent(ClickType.self,   forKey: .clickType) ?? .single
+    }
 }
 
 /// Maps a Core Graphics event type to a recorder button + kind, or nil if the
@@ -83,7 +106,12 @@ enum RecordedSequence {
             if e.kind == .down, i + 1 < events.count {
                 let n = events[i + 1]
                 if n.kind == .up, n.button == e.button, n.x == e.x, n.y == e.y {
-                    steps.append(DisplayStep(label: "\(name(e.button)) click", x: e.x, y: e.y, delayMs: e.delayMs))
+                    let multi = max(e.clickState, n.clickState) >= 2
+                    steps.append(DisplayStep(label: "\(name(e.button)) click",
+                                             x: e.x, y: e.y, delayMs: e.delayMs,
+                                             kind: "click",
+                                             button: e.button,
+                                             clickType: multi ? .double : .single))
                     i += 2
                     continue
                 }
@@ -94,7 +122,11 @@ enum RecordedSequence {
             case .up:   verb = "release"
             case .move: verb = "move"
             }
-            steps.append(DisplayStep(label: "\(name(e.button)) \(verb)", x: e.x, y: e.y, delayMs: e.delayMs))
+            steps.append(DisplayStep(label: "\(name(e.button)) \(verb)",
+                                     x: e.x, y: e.y, delayMs: e.delayMs,
+                                     kind: verb,
+                                     button: e.button,
+                                     clickType: e.clickState >= 2 ? .double : .single))
             i += 1
         }
         return steps
