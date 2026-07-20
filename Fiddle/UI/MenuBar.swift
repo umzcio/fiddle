@@ -60,10 +60,24 @@ final class PopoverController: NSObject, BridgeHost {
 
     func performWindowAction(_ action: WindowAction) {
         switch action {
-        case .showWindow: app?.showMainWindow()
+        case .showWindow:
+            // Dismiss before summoning the window. MenuBarExtra's window style
+            // hosts this web view in its own panel, and that panel does not
+            // close on its own when another window in the same app takes over,
+            // so "Open fiddle" would leave the popover hanging over the app it
+            // just opened.
+            dismissPopover()
+            app?.showMainWindow()
         case .quit:       NSApplication.shared.terminate(nil)
         default:          break
         }
+    }
+
+    /// Hide the popover panel that hosts this web view. SwiftUI does not expose
+    /// a dismiss action for MenuBarExtra's window style, so this goes through
+    /// the hosting window directly.
+    private func dismissPopover() {
+        bridge.webView.window?.orderOut(nil)
     }
 
     func webViewDidLoad(_ webView: WKWebView) {}
