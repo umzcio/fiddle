@@ -1220,7 +1220,7 @@
       if(special[t]) return special[t];
       if(/^Key([A-Z])$/.test(t)) return t.slice(3);
       if(/^Digit([0-9])$/.test(t)) return t.slice(5);
-      return t; // F1..F12 and anything else, shown literally
+      return esc(t); // F1..F12 and anything else, shown literally
     }).join(' ');
   }
 
