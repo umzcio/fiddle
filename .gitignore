@@ -22,6 +22,8 @@ scripts/.notary-config.local
 # Internal, not for the public repo
 docs/superpowers/
 CLAUDE.md
+plans/
+.claude/
 
 # macOS
 .DS_Store
