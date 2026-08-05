@@ -23,7 +23,10 @@ final class PowerAssertion {
 
     private let kind: Kind
     private var assertionID = IOPMAssertionID(0)
-    private var active = false
+    /// Whether an assertion is currently held. Read-only outside; exists so
+    /// tests can assert acquire/release balance (a leaked assertion keeps the
+    /// user's display awake forever).
+    private(set) var active = false
     private let log = Logger(subsystem: "edu.umontana.fiddle", category: "power")
 
     init(kind: Kind = .displaySleep) { self.kind = kind }
