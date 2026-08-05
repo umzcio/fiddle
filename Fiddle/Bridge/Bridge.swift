@@ -63,8 +63,13 @@ final class FiddleBridge: NSObject {
         controller.add(WeakScriptMessageHandler(self), name: Bridge.handlerName)
         webView.navigationDelegate = self
         // Transparent background so the rounded shell shows through the
-        // borderless window. drawsBackground has no public setter.
-        webView.setValue(false, forKey: "drawsBackground")
+        // borderless window. underPageBackgroundColor is the public control
+        // (macOS 12+); the legacy drawsBackground poke stays only as a guarded
+        // fallback and can never throw an unknown-key exception at launch.
+        webView.underPageBackgroundColor = .clear
+        if webView.responds(to: NSSelectorFromString("setDrawsBackground:")) {
+            webView.setValue(false, forKey: "drawsBackground")
+        }
 
         loadUI()
     }
