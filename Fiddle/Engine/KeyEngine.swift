@@ -69,6 +69,12 @@ struct CGKeyEventPoster: KeyEventPosting {
 // MARK: - Engine
 
 final class KeyEngine {
+    /// Floor on the posting interval. Faster than any legitimate use here, and
+    /// keeps a typo'd interval field from saturating the WindowServer with a
+    /// zero-leeway timer. Raise consciously if a real use case needs it;
+    /// never bypass at a call site.
+    static let minIntervalMs = 10
+
     private let poster: KeyEventPosting
     private let queue = DispatchQueue(label: "edu.umontana.fiddle.keyengine", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
@@ -91,7 +97,7 @@ final class KeyEngine {
 
     func start(keyCode: CGKeyCode, flags: CGEventFlags, intervalMs: Int, repeat r: RepeatMode, times: Int) {
         stop()
-        let interval = max(1, intervalMs)
+        let interval = max(Self.minIntervalMs, intervalMs)
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .milliseconds(interval),
                        repeating: .milliseconds(interval),

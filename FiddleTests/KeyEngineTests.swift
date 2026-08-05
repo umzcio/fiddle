@@ -65,6 +65,19 @@ final class KeyEngineTests: XCTestCase {
         XCTAssertTrue(poster.presses.first?.flags.contains(.maskCommand) ?? false)
     }
 
+    // A request for a 1ms interval must be floored to minIntervalMs (10ms),
+    // not honored as-is. 3 posted presses span 2 gaps, so a floored run takes
+    // at least 20ms; an unfloored 1ms run would finish in ~2ms.
+    func testKeyIntervalIsFlooredAtTenMilliseconds() {
+        let poster = RecordingKeyPoster()
+        let engine = KeyEngine(poster: poster)
+        let start = Date()
+        engine.start(keyCode: 49, flags: [], intervalMs: 1, repeat: .times, times: 3)
+        waitUntil { poster.presses.count >= 3 }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertGreaterThanOrEqual(elapsed, 0.02)
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() && Date() < deadline {

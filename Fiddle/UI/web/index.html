@@ -685,12 +685,13 @@
     // Swift decodes every numeric here as Int; a fractional value fails the
     // decode and the whole command is dropped, so round at the boundary.
     const intervalMs = rateMode
-      ? Math.max(1, Math.round((c.rateUnit==='minute' ? 60000 : 1000) / rate))
+      ? Math.max(10, Math.round((c.rateUnit==='minute' ? 60000 : 1000) / rate))
       : Math.round((((+c.hrs||0)*60 + (+c.min||0))*60 + (+c.sec||0))*1000 + (+c.ms||0));
     return {
       // All-blank interval fields mean "unset", not "as fast as possible";
-      // fall back to the 100ms default instead of a 1ms machine gun.
-      intervalMs: intervalMs > 0 ? intervalMs : 100,
+      // fall back to the 100ms default instead of a 1ms machine gun. Floor
+      // any explicit value at 10ms so a typo can't arm a machine-gun interval.
+      intervalMs: intervalMs > 0 ? Math.max(10, intervalMs) : 100,
       button: c.button.toLowerCase(),
       clickType: c.type.toLowerCase(),
       repeat: rateMode ? 'until' : c.repeat,
@@ -827,7 +828,9 @@
   function keyboardConfig(){
     const k=state.keyboard;
     const intervalMs=Math.round((((+k.hrs||0)*60+(+k.min||0))*60+(+k.sec||0))*1000+(+k.ms||0));
-    return { combo:k.combo||'Space', intervalMs: intervalMs>0?intervalMs:1000, repeat:k.repeat, times:Math.round(Math.max(1,+k.times||1)) };
+    // Same floor as clickerConfig: an explicit sub-10ms interval can't arm a
+    // machine-gun keystroke rate; all-blank stays 1000ms.
+    return { combo:k.combo||'Space', intervalMs: intervalMs>0?Math.max(10,intervalMs):1000, repeat:k.repeat, times:Math.round(Math.max(1,+k.times||1)) };
   }
   function beginKeyCapture(btn){
     // Already capturing on this keycap: a second click must not re-snapshot
