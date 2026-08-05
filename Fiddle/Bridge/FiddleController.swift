@@ -722,6 +722,19 @@ final class FiddleController {
     /// windows stacked in front of fiddle's, silently losing recorded steps,
     /// so the topmost on-screen window at the point decides.
     private func pointInsideAppWindow(_ point: CGPoint) -> Bool {
+        // Cheap pre-check: if the point is not inside any of our own windows'
+        // frames, no z-order can make it ours; skip the whole-desktop window
+        // query (which scales with every window in the session, per recorded
+        // event). Points inside our frames still need the real z-order answer
+        // below, because another app's window may be stacked in front of ours.
+        let maxY = NSScreen.screens.first?.frame.maxY ?? 0
+        let insideOurFrame = NSApp.windows.contains { w in
+            guard w.isVisible else { return false }
+            let f = w.frame
+            return CGRect(x: f.minX, y: maxY - f.maxY, width: f.width, height: f.height).contains(point)
+        }
+        if !insideOurFrame { return false }
+
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
             return false
         }
