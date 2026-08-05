@@ -106,13 +106,29 @@ enum RecordedSequence {
             if e.kind == .down, i + 1 < events.count {
                 let n = events[i + 1]
                 if n.kind == .up, n.button == e.button, n.x == e.x, n.y == e.y {
-                    let multi = max(e.clickState, n.clickState) >= 2
+                    var multi = max(e.clickState, n.clickState) >= 2
+                    var consumed = 2
+                    // Fold in any further down/up pairs of the same button at
+                    // the same point that carry a multi-click state, so a
+                    // physical double- (or triple-) click's four (or six) raw
+                    // events become exactly one display step.
+                    while i + consumed + 1 < events.count {
+                        let d = events[i + consumed]
+                        let u = events[i + consumed + 1]
+                        guard d.kind == .down, u.kind == .up,
+                              d.button == e.button, u.button == e.button,
+                              d.x == e.x, d.y == e.y, u.x == e.x, u.y == e.y,
+                              max(d.clickState, u.clickState) >= 2
+                        else { break }
+                        multi = true
+                        consumed += 2
+                    }
                     steps.append(DisplayStep(label: "\(name(e.button)) click",
                                              x: e.x, y: e.y, delayMs: e.delayMs,
                                              kind: "click",
                                              button: e.button,
                                              clickType: multi ? .double : .single))
-                    i += 2
+                    i += consumed
                     continue
                 }
             }

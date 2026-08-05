@@ -113,4 +113,69 @@ final class RecordingTests: XCTestCase {
         XCTAssertEqual(step.button, .left)
         XCTAssertEqual(step.clickType, .single)
     }
+
+    // A physical double-click reaches the recorder as four events: down(1),
+    // up(1), down(2), up(2). Both pairs must fold into ONE display step, or
+    // MacroCompiler later expands it into three click pairs instead of two.
+    func testDisplayStepsFoldsDoubleClickIntoOneStep() {
+        let events = [
+            RecordedEvent(kind: .down, button: .left, x: 5, y: 5, delayMs: 100, clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 5, y: 5, delayMs: 10,  clickState: 1),
+            RecordedEvent(kind: .down, button: .left, x: 5, y: 5, delayMs: 40,  clickState: 2),
+            RecordedEvent(kind: .up,   button: .left, x: 5, y: 5, delayMs: 10,  clickState: 2),
+        ]
+        let steps = RecordedSequence.displaySteps(events)
+        XCTAssertEqual(steps.count, 1)
+        XCTAssertEqual(steps[0].clickType, .double)
+        XCTAssertEqual(steps[0].kind, "click")
+        XCTAssertEqual(steps[0].label, "Left click")
+        // Folded step keeps delayMs from the FIRST down event.
+        XCTAssertEqual(steps[0].delayMs, 100)
+    }
+
+    // A triple-click's third down/up pair (clickState 3) folds into the same
+    // step as well.
+    func testDisplayStepsFoldsTripleClickIntoOneStep() {
+        let events = [
+            RecordedEvent(kind: .down, button: .left, x: 2, y: 2, delayMs: 50, clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 2, y: 2, delayMs: 8,  clickState: 1),
+            RecordedEvent(kind: .down, button: .left, x: 2, y: 2, delayMs: 30, clickState: 2),
+            RecordedEvent(kind: .up,   button: .left, x: 2, y: 2, delayMs: 8,  clickState: 2),
+            RecordedEvent(kind: .down, button: .left, x: 2, y: 2, delayMs: 30, clickState: 3),
+            RecordedEvent(kind: .up,   button: .left, x: 2, y: 2, delayMs: 8,  clickState: 3),
+        ]
+        let steps = RecordedSequence.displaySteps(events)
+        XCTAssertEqual(steps.count, 1)
+        XCTAssertEqual(steps[0].clickType, .double)
+        XCTAssertEqual(steps[0].delayMs, 50)
+    }
+
+    // Two genuinely separate single clicks (all clickState 1) must remain two
+    // steps; the fold must not bleed across unrelated clicks.
+    func testDisplayStepsKeepsSeparateSingleClicksSeparate() {
+        let events = [
+            RecordedEvent(kind: .down, button: .left, x: 1, y: 1, delayMs: 0,   clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 1, y: 1, delayMs: 4,   clickState: 1),
+            RecordedEvent(kind: .down, button: .left, x: 1, y: 1, delayMs: 900, clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 1, y: 1, delayMs: 4,   clickState: 1),
+        ]
+        let steps = RecordedSequence.displaySteps(events)
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps.map(\.clickType), [.single, .single])
+    }
+
+    // If the second down/up pair lands at different coordinates it is not
+    // part of the same physical double-click and must not be folded in.
+    func testDisplayStepsDoesNotFoldPairsAtDifferentPoints() {
+        let events = [
+            RecordedEvent(kind: .down, button: .left, x: 5,  y: 5,  delayMs: 0,  clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 5,  y: 5,  delayMs: 10, clickState: 1),
+            RecordedEvent(kind: .down, button: .left, x: 50, y: 50, delayMs: 40, clickState: 1),
+            RecordedEvent(kind: .up,   button: .left, x: 50, y: 50, delayMs: 10, clickState: 1),
+        ]
+        let steps = RecordedSequence.displaySteps(events)
+        XCTAssertEqual(steps.count, 2)
+        XCTAssertEqual(steps.map(\.clickType), [.single, .single])
+        XCTAssertEqual(steps[1].x, 50)
+    }
 }
