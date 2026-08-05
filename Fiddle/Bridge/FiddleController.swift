@@ -597,9 +597,43 @@ final class FiddleController {
 
     // MARK: - Macros
 
+    /// Total step budget across the whole macro library, matching
+    /// `ClickRecorder.maxEvents`. The recording that seeds a macro is capped at
+    /// the same size, so a macro library should not be able to exceed it either.
+    static let maxMacroSteps = 10_000
+
+    /// Truncate a macro library to a total step budget, dropping later steps
+    /// first. Macros are kept in order; earlier macros keep all their steps
+    /// until the budget is exhausted, the macro that crosses the budget is cut
+    /// to whatever remains, and every macro after that keeps its (possibly
+    /// zero) remaining budget. Macros themselves are never dropped, only steps.
+    static func capped(_ macros: [Macro], budget: Int = FiddleController.maxMacroSteps) -> (macros: [Macro], truncated: Bool) {
+        var remaining = budget
+        var truncated = false
+        var out: [Macro] = []
+        out.reserveCapacity(macros.count)
+        for macro in macros {
+            if macro.steps.count <= remaining {
+                out.append(macro)
+                remaining -= macro.steps.count
+            } else {
+                var cut = macro
+                cut.steps = Array(macro.steps.prefix(max(0, remaining)))
+                out.append(cut)
+                remaining = 0
+                truncated = true
+            }
+        }
+        return (out, truncated)
+    }
+
     private func saveMacros(_ macros: [Macro]) {
-        store.setMacros(macros)
+        let (capped, truncated) = Self.capped(macros)
+        store.setMacros(capped)
         emitMacros()
+        if truncated {
+            broadcast(.error(message: "Macros are limited to 10,000 steps in total. The extra steps were not saved."))
+        }
     }
 
     private func emitMacros(to sink: EngineEventSink? = nil) {

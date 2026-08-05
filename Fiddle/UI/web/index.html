@@ -769,6 +769,7 @@
     persistTimer=setTimeout(()=>{ persistTimer=null; send({type:'updateConfig', mode:m, config:currentConfig(m)}); }, 250);
   }
   window.addEventListener('blur', flushPersist);
+  window.addEventListener('blur', flushSaveMacros);
 
   function viewClicker(){
     if(state.device==='keyboard') return viewKeyboard();
@@ -990,7 +991,21 @@
   // ---------- macros ----------
   function macroId(){ return 'm' + (state.macros.reduce((n,m)=>Math.max(n, +(m.id||'m0').slice(1)||0),0) + 1); }
   function selectedMacro(){ return state.macros.find(m=>m.id===state.selectedMacro) || state.macros[0] || null; }
-  function saveMacros(){ send({type:'saveMacros', macros: state.macros}); }
+  // Debounce macro saves the same way config edits are debounced above: every
+  // send serializes the whole macro library across the bridge and re-encodes
+  // the entire settings blob. Rendering stays immediate; only the bridge send
+  // waits out a 250ms pause, and is flushed on blur so it is never dropped.
+  let saveMacrosTimer=null;
+  function flushSaveMacros(){
+    if(!saveMacrosTimer) return;
+    clearTimeout(saveMacrosTimer);
+    saveMacrosTimer=null;
+    send({type:'saveMacros', macros: state.macros});
+  }
+  function saveMacros(){
+    clearTimeout(saveMacrosTimer);
+    saveMacrosTimer=setTimeout(()=>{ saveMacrosTimer=null; send({type:'saveMacros', macros: state.macros}); }, 250);
+  }
   function stepStep(kind){
     return { kind, button:'left', clickType:'single', x:0, y:0, ms:(kind==='wait'?200:0) };
   }
@@ -1079,19 +1094,29 @@
   function deleteStep(i){ const m=selectedMacro(); if(!m) return; m.steps.splice(i,1); saveMacros(); viewSequencer(); applyBanner(); }
   function importRecording(){
     const m=selectedMacro(); if(!m) return;
-    (state.recording||[]).forEach(s=>{
-      if(s.delayMs>0) m.steps.push({kind:'wait', button:'left', clickType:'single', x:0, y:0, ms:s.delayMs});
+    // The native side is the real enforcement (FiddleController.capped truncates
+    // the saved library to 10,000 steps total), but importing appends a wait
+    // plus an action per recorded step, so a long recording can build a huge
+    // array in memory before that cap ever runs. Stop early here too.
+    const budget = 10000 - m.steps.length;
+    if(budget<=0) return;
+    let added=0;
+    const recording = state.recording||[];
+    for(let i=0;i<recording.length;i++){
+      if(added>=budget) break;
+      const s=recording[i];
+      if(s.delayMs>0){ m.steps.push({kind:'wait', button:'left', clickType:'single', x:0, y:0, ms:s.delayMs}); added++; }
       const button=['left','right','middle'].includes(s.button)?s.button:'left';
       const clickType=s.clickType==='double'?'double':'single';
       // A press whose release landed elsewhere still becomes a click at the
       // press point. Dropping it lost the click entirely. The matching
       // release is skipped so one physical click yields one step.
       if(s.kind==='click' || s.kind==='press'){
-        m.steps.push({kind:'click', button:button, clickType:clickType, x:s.x, y:s.y, ms:0});
+        m.steps.push({kind:'click', button:button, clickType:clickType, x:s.x, y:s.y, ms:0}); added++;
       } else if(s.kind==='move'){
-        m.steps.push({kind:'move', button:'left', clickType:'single', x:s.x, y:s.y, ms:0});
+        m.steps.push({kind:'move', button:'left', clickType:'single', x:s.x, y:s.y, ms:0}); added++;
       }
-    });
+    }
     saveMacros(); viewSequencer(); applyBanner();
   }
 
