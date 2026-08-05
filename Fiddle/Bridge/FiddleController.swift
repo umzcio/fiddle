@@ -637,6 +637,13 @@ final class FiddleController {
         broadcast(.config(mode: .antiAFK, config: .antiAFK(p.antiAFK)))
         broadcast(.config(mode: .keyboard, config: .keyboard(p.keyboard)))
         broadcast(prefsEvent())
+        // A running engine snapshotted its config at start() and never sees the
+        // store update above. Restart the active mode so the run actually uses
+        // the profile the user just applied. Recorder and macro runs do not take
+        // profile values, so they keep running untouched.
+        if status == .running, ![.recorder, .macro].contains(lastMode) {
+            start(mode: lastMode, config: config(for: lastMode))
+        }
         logActivity("Applied profile \(p.name)")
     }
 
