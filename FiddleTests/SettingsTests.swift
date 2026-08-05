@@ -370,4 +370,32 @@ final class SettingsTests: XCTestCase {
         let prefs = try JSONDecoder().decode(AppPrefs.self, from: Data(json.utf8))
         XCTAssertEqual(prefs.lastMacroId, "")
     }
+
+    // A blob missing the clicker key entirely must not fail the whole decode:
+    // the clicker section falls back to Settings.default.clicker and every
+    // other section (profiles, macros) survives intact.
+    func testDecodeSurvivesMissingClickerSection() throws {
+        let blob = """
+        {"jiggler":{"intervalSec":30,"distancePx":40,"mode":"zen","keepAwake":true,"idleOnly":true},
+         "profiles":[{"id":"p1","name":"Good","device":"mouse"}],
+         "macros":[{"id":"m1","name":"A","steps":[]}]}
+        """
+        let s = try JSONDecoder().decode(Settings.self, from: Data(blob.utf8))
+        XCTAssertEqual(s.clicker, Settings.default.clicker)
+        XCTAssertEqual(s.profiles.map(\.id), ["p1"])
+        XCTAssertEqual(s.macros.map(\.id), ["m1"])
+    }
+
+    // Same as above but for the jiggler key.
+    func testDecodeSurvivesMissingJigglerSection() throws {
+        let blob = """
+        {"clicker":{"intervalMs":100,"button":"left","clickType":"single","repeat":"until","times":50,"position":"current","x":640,"y":480},
+         "profiles":[{"id":"p1","name":"Good","device":"mouse"}],
+         "macros":[{"id":"m1","name":"A","steps":[]}]}
+        """
+        let s = try JSONDecoder().decode(Settings.self, from: Data(blob.utf8))
+        XCTAssertEqual(s.jiggler, Settings.default.jiggler)
+        XCTAssertEqual(s.profiles.map(\.id), ["p1"])
+        XCTAssertEqual(s.macros.map(\.id), ["m1"])
+    }
 }
