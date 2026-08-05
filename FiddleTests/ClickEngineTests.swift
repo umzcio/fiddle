@@ -128,6 +128,21 @@ final class ClickEngineLogicTests: XCTestCase {
         XCTAssertEqual(poster.clicks.first?.point, CGPoint(x: 7, y: 8))
     }
 
+    // A request for a 1ms interval must be floored to minIntervalMs (10ms),
+    // not honored as-is. 3 posted clicks span 2 gaps, so a floored run takes
+    // at least 20ms; an unfloored 1ms run would finish in ~2ms.
+    func testIntervalIsFlooredAtTenMilliseconds() {
+        let poster = RecordingClickPoster()
+        let engine = ClickEngine(poster: poster)
+        let start = Date()
+        engine.start(config: ClickerConfig(intervalMs: 1, button: .left, clickType: .single,
+                                           repeat: .times, times: 3,
+                                           position: .fixed, x: 0, y: 0))
+        waitUntil { poster.clicks.count >= 3 }
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertGreaterThanOrEqual(elapsed, 0.02)
+    }
+
     private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() && Date() < deadline {

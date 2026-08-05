@@ -112,6 +112,12 @@ struct CGEventMousePoster: MouseEventPosting {
 // MARK: - Engine
 
 final class ClickEngine {
+    /// Floor on the posting interval. Faster than any legitimate use here, and
+    /// keeps a typo'd rate field from saturating the WindowServer with a
+    /// zero-leeway timer. Raise consciously if a real use case needs it;
+    /// never bypass at a call site.
+    static let minIntervalMs = 10
+
     private let poster: MouseEventPosting
     private let queue = DispatchQueue(label: "edu.umontana.fiddle.clickengine", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
@@ -145,7 +151,7 @@ final class ClickEngine {
 
     func start(config: ClickerConfig) {
         stop()
-        let interval = max(1, config.intervalMs)
+        let interval = max(Self.minIntervalMs, config.intervalMs)
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .milliseconds(interval),
                        repeating: .milliseconds(interval),
