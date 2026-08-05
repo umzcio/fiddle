@@ -109,8 +109,8 @@ struct Settings: Codable, Equatable {
     // Tolerate settings saved before `prefs`, `wakeLock`, `antiAFK`, `recording`, `recorder`, `macros`, or `keyboard` existed.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        clicker = try c.decode(ClickerConfig.self, forKey: .clicker)
-        jiggler = try c.decode(JigglerConfig.self, forKey: .jiggler)
+        clicker = try c.decodeIfPresent(ClickerConfig.self, forKey: .clicker) ?? Settings.default.clicker
+        jiggler = try c.decodeIfPresent(JigglerConfig.self, forKey: .jiggler) ?? Settings.default.jiggler
         prefs = try c.decodeIfPresent(AppPrefs.self, forKey: .prefs) ?? .default
         wakeLock = try c.decodeIfPresent(WakeLockConfig.self, forKey: .wakeLock) ?? WakeLockConfig(keepDisplayAwake: true, keepSystemAwake: false)
         antiAFK  = try c.decodeIfPresent(AntiAFKConfig.self,  forKey: .antiAFK)  ?? AntiAFKConfig(intervalSec: 60, distancePx: 30, keepAwake: true)
