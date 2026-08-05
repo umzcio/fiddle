@@ -17,7 +17,7 @@ CONFIG="$ROOT/scripts/.notary-config.local"
 [ -f "$CONFIG" ] || { echo "error: $CONFIG not found (copy scripts/.notary-config.example)"; exit 1; }
 # shellcheck disable=SC1090
 source "$CONFIG"
-KEY_PATH="$(eval echo "$NOTARY_KEY")"
+KEY_PATH="${NOTARY_KEY/#\~/$HOME}"
 
 echo "==> Submitting $(basename "$ARTIFACT") to Apple notary"
 xcrun notarytool submit "$ARTIFACT" \
