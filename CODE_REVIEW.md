@@ -1,5 +1,7 @@
 # fiddle Code Review
 
+Status: review of the pre-1.0 codebase, 2026-06-10. All Critical and Major findings were fixed by 1.0.3; deferred items live in FOLLOWUP.md.
+
 Multi-agent review performed 2026-06-10. Six parallel scout agents (events/taps, power/permissions/hotkeys, WebView bridge, concurrency, persistence, dead code) produced 40 unique candidate findings after dedup; an independent verification agent re-read every cited line plus callers and guards, performed a mandated second pass, and confirmed all 40 (7 with corrections). Review only, no fixes applied.
 
 Severity definitions: **Critical** = security issue, stuck input/power state (leaked assertion, unstoppable engine, panic key failure), data loss, or crash on realistic input. **Major** = wrong behavior or significant degradation with a workaround. **Minor** = quality/maintenance improvement.

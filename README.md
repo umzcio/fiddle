@@ -19,7 +19,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v1.0-bf1410?style=flat-square" alt="v1.0" />
+  <img src="https://github.com/umzcio/fiddle/actions/workflows/ci.yml/badge.svg" alt="CI" />
+  <img src="https://img.shields.io/github/v/release/umzcio/fiddle?style=flat-square&color=bf1410" alt="release" />
   <img src="https://img.shields.io/badge/license-MIT-bf1410?style=flat-square" alt="MIT" />
   <img src="https://img.shields.io/badge/stack-Swift%205.9%20%7C%20SwiftUI%20%7C%20WKWebView-7e0606?style=flat-square" alt="Stack" />
   <img src="https://img.shields.io/badge/platform-macOS%2014%2B%20(Sonoma)-350202?style=flat-square" alt="macOS" />
@@ -108,6 +109,8 @@ Grab the signed, notarized build from the [latest release](https://github.com/um
 
 On first launch, fiddle asks for the **Accessibility** permission, which macOS requires for any app that synthesizes or taps input. Grant it in System Settings, then relaunch. The Click Recorder additionally asks for **Input Monitoring** the first time you record. fiddle explains each one and links you straight to the right pane.
 
+fiddle checks a signed appcast on GitHub once a day and verifies every update with an EdDSA signature before installing. Updates can also be checked on demand from the About panel. Nothing else leaves the machine.
+
 ### Build from source
 
 **Prerequisites**
@@ -126,7 +129,33 @@ open Fiddle.xcodeproj
 xcodebuild -scheme Fiddle -configuration Debug build
 ```
 
+The project pins the maintainer's Developer ID signing identity, so the plain command above fails for anyone without that certificate (this is intentional: a stable Developer ID signature keeps the app's Accessibility grant across rebuilds, so we did not weaken it to ad-hoc signing). To build without it, override signing:
+
+```bash
+xcodebuild -scheme Fiddle -configuration Debug \
+  -derivedDataPath build \
+  -clonedSourcePackagesDirPath build/SourcePackages \
+  -destination 'platform=macOS' \
+  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="" \
+  build
+```
+
 The first run prompts for Accessibility. Grant it in System Settings, then relaunch.
+
+#### Tests
+
+Run the same override with `test` in place of `build`:
+
+```bash
+xcodebuild -scheme Fiddle -configuration Debug \
+  -derivedDataPath build \
+  -clonedSourcePackagesDirPath build/SourcePackages \
+  -destination 'platform=macOS' \
+  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="" \
+  test
+```
 
 ---
 

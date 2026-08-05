@@ -1,5 +1,7 @@
 # Follow-ups from the code-review remediation pass
 
+Status: living list, last reconciled 2026-08-05 against 1.0.5. Items here are confirmed but deferred by design.
+
 Items intentionally not fixed on the `code-review-fixes` branch: deferred
 findings that need a design decision, plus adjacent problems spotted during
 surgery but outside the findings being fixed.
@@ -60,10 +62,6 @@ surgery but outside the findings being fixed.
   Fix options: implement the UIDelegate text-input panel on both bridges, or
   replace the prompt with an in-DOM name field. Verify on a real run first.
 
-- **PositionPicker can capture fiddle's own synthesized click as the pick.**
-  Fixed on the audit-remediation branch (2026-07-19): the picker tap now
-  checks `SyntheticEvents.userDataTag` like the recorder does.
-
 ## Deferred findings from the 2026-07-19 full audit
 
 Confirmed by the audit's adversarial verification but intentionally not
@@ -89,3 +87,9 @@ or its own reviewed change.
 - **Quitting from Click Sequencer relaunches into Macro Player.** Both
   categories record lastMode "macro" and the restore map resolves it to the
   Macro Player view. Cosmetic; distinguishing them needs a UI-only pref.
+
+## Resolved since filing
+
+- **PositionPicker can capture fiddle's own synthesized click as the pick.**
+  Fixed on the audit-remediation branch (2026-07-19), commit `3271ccc`: the
+  picker tap now checks `SyntheticEvents.userDataTag` like the recorder does.
