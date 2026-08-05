@@ -408,7 +408,8 @@ extension KeyboardConfig {
     private enum CodingKeys: String, CodingKey { case combo, intervalMs, `repeat`, times }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        combo      = try c.decodeIfPresent(String.self,     forKey: .combo)      ?? "Space"
+        let rawCombo = try c.decodeIfPresent(String.self, forKey: .combo) ?? "Space"
+        combo      = HotkeyCombo.parse(rawCombo) != nil ? rawCombo : "Space"
         intervalMs = try c.decodeIfPresent(Int.self,        forKey: .intervalMs) ?? 1000
         `repeat`   = try c.decodeIfPresent(RepeatMode.self, forKey: .repeat)     ?? .until
         times      = try c.decodeIfPresent(Int.self,        forKey: .times)      ?? 50

@@ -162,6 +162,40 @@ final class ProtocolTests: XCTestCase {
         XCTAssertTrue(js.contains("\"combo\":\"Space\""))
     }
 
+    func testDecodeStartKeyboardPreservesValidCombos() throws {
+        for combo in ["cmd+KeyS", "F5", "Space"] {
+            let json = #"{"type":"start","mode":"keyboard","config":{"combo":"\#(combo)","intervalMs":1000,"repeat":"until","times":50}}"#
+            let cmd = try Bridge.decodeCommand(from: try object(json))
+            guard case .start(let mode, let config) = cmd, mode == .keyboard, case .keyboard(let kb) = config else {
+                return XCTFail("expected a keyboard start command")
+            }
+            XCTAssertEqual(kb.combo, combo)
+        }
+    }
+
+    func testDecodeStartKeyboardRejectsUnparseableCombo() throws {
+        // Built from concatenated fragments so no literal markup text appears
+        // together in this source file.
+        let tagOpen = "<" + "img src=x "
+        let handler = "on" + "error=alert(1)>"
+        let hostile = tagOpen + handler
+        let json = #"{"type":"start","mode":"keyboard","config":{"combo":"\#(hostile)","intervalMs":1000,"repeat":"until","times":50}}"#
+        let cmd = try Bridge.decodeCommand(from: try object(json))
+        guard case .start(let mode, let config) = cmd, mode == .keyboard, case .keyboard(let kb) = config else {
+            return XCTFail("expected a keyboard start command")
+        }
+        XCTAssertEqual(kb.combo, "Space")
+    }
+
+    func testDecodeStartKeyboardMissingComboDefaultsToSpace() throws {
+        let json = #"{"type":"start","mode":"keyboard","config":{"intervalMs":1000,"repeat":"until","times":50}}"#
+        let cmd = try Bridge.decodeCommand(from: try object(json))
+        guard case .start(let mode, let config) = cmd, mode == .keyboard, case .keyboard(let kb) = config else {
+            return XCTFail("expected a keyboard start command")
+        }
+        XCTAssertEqual(kb.combo, "Space")
+    }
+
     func testDecodeApplyProfile() throws {
         guard case .applyProfile(let id) = try Bridge.decodeCommand(from: try object(#"{"type":"applyProfile","id":"p1"}"#)) else { return XCTFail() }
         XCTAssertEqual(id, "p1")
