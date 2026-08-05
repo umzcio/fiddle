@@ -57,4 +57,51 @@ final class MacroTests: XCTestCase {
         let cfg = MacroConfig(macroId: "m1", repeat: .times, times: 3)
         XCTAssertEqual(try JSONDecoder().decode(MacroConfig.self, from: JSONEncoder().encode(cfg)), cfg)
     }
+
+    // MARK: - FiddleController.capped
+
+    private func macro(_ id: String, stepCount: Int) -> Macro {
+        Macro(id: id, name: id, steps: (0..<stepCount).map { wait($0) })
+    }
+
+    @MainActor
+    func testCappedUnderBudgetPassesThroughUnchanged() {
+        let macros = [macro("a", stepCount: 10), macro("b", stepCount: 20)]
+        let (result, truncated) = FiddleController.capped(macros, budget: 100)
+        XCTAssertFalse(truncated)
+        XCTAssertEqual(result, macros)
+    }
+
+    @MainActor
+    func testCappedOverBudgetCutToExactlyBudgetTotalStepsPreservingOrder() {
+        let macros = [macro("a", stepCount: 6), macro("b", stepCount: 6), macro("c", stepCount: 6)]
+        let (result, truncated) = FiddleController.capped(macros, budget: 10)
+        XCTAssertTrue(truncated)
+        XCTAssertEqual(result.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(result.reduce(0) { $0 + $1.steps.count }, 10)
+        XCTAssertEqual(result[0].steps.count, 6)
+        XCTAssertEqual(result[1].steps.count, 4)
+        XCTAssertEqual(result[2].steps.count, 0)
+        // Order of surviving steps is preserved (earliest steps kept).
+        XCTAssertEqual(result[0].steps, macros[0].steps)
+        XCTAssertEqual(result[1].steps, Array(macros[1].steps.prefix(4)))
+    }
+
+    @MainActor
+    func testCappedSingleMacroLargerThanWholeBudgetKeepsFirstNSteps() {
+        let macros = [macro("a", stepCount: 50)]
+        let (result, truncated) = FiddleController.capped(macros, budget: 10)
+        XCTAssertTrue(truncated)
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "a")
+        XCTAssertEqual(result[0].steps.count, 10)
+        XCTAssertEqual(result[0].steps, Array(macros[0].steps.prefix(10)))
+    }
+
+    @MainActor
+    func testCappedEmptyLibraryIsOk() {
+        let (result, truncated) = FiddleController.capped([], budget: 10)
+        XCTAssertFalse(truncated)
+        XCTAssertEqual(result, [])
+    }
 }
