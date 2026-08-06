@@ -82,6 +82,7 @@ final class ClickEngineLogicTests: XCTestCase {
         waitUntil { poster.clicks.count >= 2 }
         engine.stop()
         let afterStop = poster.clicks.count
+        XCTAssertGreaterThan(afterStop, 0, "engine never posted; stop test would be vacuous")
         Thread.sleep(forTimeInterval: 0.15)
         XCTAssertEqual(poster.clicks.count, afterStop)
     }
@@ -143,12 +144,6 @@ final class ClickEngineLogicTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(elapsed, 0.02)
     }
 
-    private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.01)
-        }
-    }
 }
 
 /// Thread-safe mock: ClickEngine posts from its own queue.

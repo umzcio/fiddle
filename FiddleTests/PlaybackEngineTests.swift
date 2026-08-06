@@ -82,12 +82,6 @@ final class PlaybackEngineTests: XCTestCase {
         engine.stop()
     }
 
-    private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.01)
-        }
-    }
 }
 
 /// Thread-safe mock poster: playLoop posts from its worker thread.
