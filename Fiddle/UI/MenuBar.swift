@@ -9,6 +9,7 @@
 
 import SwiftUI
 import WebKit
+import os
 
 /// Drives the menu-bar icon (filled flame while running). A single shared
 /// instance is observed by the App scene (so the MenuBarExtra label re-renders)
@@ -45,6 +46,8 @@ struct MenuLabel: View {
 /// the AppDelegate.
 @MainActor
 final class PopoverController: NSObject, BridgeHost {
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "menubar")
+
     private(set) var bridge: FiddleBridge!
     private weak var app: AppDelegate?
 
@@ -69,7 +72,10 @@ final class PopoverController: NSObject, BridgeHost {
             dismissPopover()
             app?.showMainWindow()
         case .quit:       NSApplication.shared.terminate(nil)
-        default:          break
+        case .minimize, .close, .help, .fit, .checkForUpdates:
+            // The main window host owns these; arriving here means a
+            // mis-routed message worth seeing in the log, not a crash.
+            log.debug("window action \(String(describing: action), privacy: .public) ignored by the popover host")
         }
     }
 

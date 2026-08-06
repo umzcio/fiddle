@@ -127,7 +127,11 @@ final class FiddleController {
         case .setPref(let key, let value):
             applyPref(key: key, value: value)
             broadcast(prefsEvent(), excluding: sink)
-        case .window:                         break  // handled by the window host
+        case .window:
+            // Unreachable: Bridge.route intercepts .window before forwarding.
+            // Kept as an explicit case so the Command switch stays exhaustive
+            // without a default that could swallow future commands.
+            break
         case .recordStart:                    beginRecording()
         case .recordStop:                     endRecording()
         case .clearRecording:                 clearRecording()
