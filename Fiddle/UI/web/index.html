@@ -433,13 +433,21 @@
     display:grid;place-items:center;transition:transform var(--dur-press) var(--ease-out);position:relative;
     filter:drop-shadow(0 4px 9px rgba(0,0,0,.55));
   }
-  .startorb img{width:66px;height:66px;display:block;pointer-events:none}
+  .startorb img{width:66px;height:66px;display:block;pointer-events:none;position:relative;z-index:1}
   .startorb:hover{transform:translateY(-1px)}
   .startorb:active{transform:translateY(2px);transition-duration:100ms}
-  .startorb.running{animation:ignite 1.15s ease-in-out infinite}
-  @keyframes ignite{
-    0%,100%{filter:drop-shadow(0 4px 9px rgba(0,0,0,.55)) drop-shadow(0 0 6px rgba(255,140,40,.6))}
-    50%{filter:drop-shadow(0 4px 9px rgba(0,0,0,.55)) drop-shadow(0 0 20px rgba(255,90,20,1))}}
+  .startorb::after{
+    content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+    background:url('fiddle-logo.png') center / 66px 66px no-repeat;
+    filter:drop-shadow(0 0 6px rgba(255,140,40,.6)) drop-shadow(0 0 20px rgba(255,90,20,1));
+    opacity:0;
+    transition:opacity 160ms var(--ease-out);
+  }
+  .startorb.running::after{
+    opacity:1;
+    animation:ignite 1.15s var(--ease-in-out) infinite;
+  }
+  @keyframes ignite{0%,100%{opacity:.55}50%{opacity:1}}
 
   /* ============ FOOTER ============ */
   .footer{display:flex;align-items:center;justify-content:space-between;padding:9px 6px 2px;
