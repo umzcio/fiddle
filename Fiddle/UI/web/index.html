@@ -176,8 +176,19 @@
     background:linear-gradient(180deg,#60646a 0%,#3a3d42 55%,#27292d 100%);
     border:1px solid #15161a;
     box-shadow:0 1px 0 rgba(255,255,255,.2) inset,0 10px 26px rgba(0,0,0,.6);
+    transform-origin: top left;
+    opacity:1; transform:scale(1);
+    transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out),
+                display 180ms allow-discrete;
   }
-  .sel-menu[hidden]{display:none}
+  .sel-menu[hidden]{display:none; opacity:0; transform:scale(.96)}
+  @starting-style{
+    .sel-menu{opacity:0; transform:scale(.96)}
+  }
+  /* Reduced motion: keep the fade, drop the scale travel. */
+  @media (prefers-reduced-motion: reduce){
+    .sel-menu, .sel-menu[hidden]{transform:none}
+  }
   .sel-menu li{
     display:flex;align-items:center;gap:12px;white-space:nowrap;
     padding:7px 12px;border-radius:7px;cursor:pointer;
