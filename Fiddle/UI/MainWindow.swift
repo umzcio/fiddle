@@ -10,6 +10,7 @@
 
 import AppKit
 import WebKit
+import os
 
 /// Borderless windows refuse key/main status by default; the web UI needs both
 /// so its text fields and buttons are interactive.
@@ -39,6 +40,8 @@ final class DragRegionView: NSView {
 
 @MainActor
 final class MainWindowController: NSObject, BridgeHost {
+    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
+
     let window: FiddleWindow
     private(set) var bridge: FiddleBridge!
     let controller: FiddleController
@@ -130,8 +133,10 @@ final class MainWindowController: NSObject, BridgeHost {
             fitToContent()
         case .checkForUpdates:
             onCheckForUpdates?()
-        default:
-            break
+        case .showWindow, .quit:
+            // The menu-bar host owns these; arriving here means a mis-routed
+            // message worth seeing in the log, not a crash.
+            log.debug("window action \(String(describing: action), privacy: .public) ignored by the main window host")
         }
     }
 
