@@ -754,6 +754,22 @@
   // start within 250ms of the last keystroke runs the previous value; the
   // flame is unaffected (it sends its config inline). Switching modes flushes
   // the pending edit immediately so it is never dropped.
+
+  // The popover web view lives (hidden) for the app's lifetime and receives
+  // every broadcast. Rendering it while hidden wastes a layout+paint per edit
+  // and can blow away a live input; render once on reveal instead.
+  let menubarDirty = false;
+  function renderMenubar(){
+    if(document.hidden){ menubarDirty = true; return; }
+    viewMenubar(); applyBanner();
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && menubarDirty && state.surface==='menubar'){
+      menubarDirty = false;
+      viewMenubar(); applyBanner();
+    }
+  });
+
   let persistTimer=null, persistMode=null;
   function flushPersist(){
     if(!persistTimer) return;
@@ -1184,7 +1200,7 @@
     send({type:'saveProfiles', profiles:state.profiles});
     if(state.cat==='profiles'){ viewProfiles(); applyBanner(); }
   }
-  function applyProfiles(list){ state.profiles = Array.isArray(list)?list:[]; if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; } if(state.cat==='profiles'){ viewProfiles(); applyBanner(); } }
+  function applyProfiles(list){ state.profiles = Array.isArray(list)?list:[]; if(state.surface==='menubar'){ renderMenubar(); return; } if(state.cat==='profiles'){ viewProfiles(); applyBanner(); } }
 
   function pushActivity(message, level){
     const d=new Date();
@@ -1532,7 +1548,7 @@
     btn.setAttribute('aria-pressed', state.running ? 'true' : 'false');
     led.classList.toggle('live', state.running);
     statusText.textContent = state.running ? 'Running' : 'Idle';
-    if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    if(state.surface==='menubar'){ renderMenubar(); return; }
   }
 
   let needsAccessibility = false;
@@ -1635,7 +1651,7 @@
       state.recorder.repeat = cfg.repeat==='times' ? 'times' : 'until';
       state.recorder.times = Math.round(+cfg.times||0) || 1;
     }
-    if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    if(state.surface==='menubar'){ renderMenubar(); return; }
     if(state.cat===mode && views[mode]) views[mode](); // re-render if showing this mode
   }
 
@@ -1646,7 +1662,7 @@
     document.body.dataset.skin = next;
     // Rebuild the popover only when the skin actually changed; otherwise an
     // unrelated prefs broadcast rebuilds its form mid-use.
-    if(changed && state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    if(changed && state.surface==='menubar'){ renderMenubar(); return; }
   }
 
   // The saved last-used mode may move the visible view only once, at boot.
@@ -1681,7 +1697,7 @@
     }
     applySkin(state.prefs.skin);
     if(state.surface==='menubar'){
-      if(first){ viewMenubar(); applyBanner(); }
+      if(first){ renderMenubar(); }
       return;
     }
     if(state.cat==='more') viewMore();
@@ -1708,7 +1724,7 @@
   function applyMacros(list){
     state.macros = Array.isArray(list) ? list : [];
     if(state.selectedMacro && !state.macros.find(m=>m.id===state.selectedMacro)) state.selectedMacro = null;
-    if(state.surface==='menubar'){ viewMenubar(); applyBanner(); return; }
+    if(state.surface==='menubar'){ renderMenubar(); return; }
     rerenderMacroViews();
   }
 
