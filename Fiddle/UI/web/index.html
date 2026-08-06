@@ -461,7 +461,9 @@
   .startorb:active{transform:translateY(2px);transition-duration:100ms}
   .startorb::after{
     content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
-    background:url('fiddle-logo.png') center / 66px 66px no-repeat;
+    /* contain, not a fixed size: the popover surface shrinks the orb to 48px
+       and a fixed 66px image gets cropped square, squaring the halo. */
+    background:url('fiddle-logo.png') center / contain no-repeat;
     filter:drop-shadow(0 0 6px rgba(255,140,40,.6)) drop-shadow(0 0 20px rgba(255,90,20,1));
     opacity:0;
     transition:opacity 160ms var(--ease-out);
