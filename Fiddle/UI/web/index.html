@@ -971,8 +971,13 @@
     const r=state.recorder;
     const recording=state.recordingActive;
     const steps=state.recording||[];
+    const RECORDER_RENDER_CAP = 200;
+    const shown = steps.slice(0, RECORDER_RENDER_CAP);
     const list = steps.length
-      ? steps.map((s,i)=>`<div class="step">${i+1} · ${s.label} @ (${s.x}, ${s.y}) <span>+${(s.delayMs/1000).toFixed(2)}s</span></div>`).join('')
+      ? shown.map((s,i)=>`<div class="step">${i+1} · ${s.label} @ (${s.x}, ${s.y}) <span>+${(s.delayMs/1000).toFixed(2)}s</span></div>`).join('')
+        + (steps.length > RECORDER_RENDER_CAP
+            ? `<div class="step" style="opacity:.7">Showing the first ${RECORDER_RENDER_CAP} of ${steps.length} steps. All of them play back and import.</div>`
+            : '')
       : `<div class="step" style="opacity:.7">No steps yet. Click Record, then click around in another app.</div>`;
     const permNote = state.inputMonitoring ? '' :
       `<div class="row"><span class="hint" style="color:#ffd9a0">Input Monitoring permission required to record. </span>
@@ -1327,7 +1332,7 @@
           </div></div>
       </div>
       <div class="group"><h4>About</h4>
-        <div class="row"><span class="hint">fiddle 1.0, a loving tribute to Nero StartSmart. Nero fiddled while Rome burned, fiddle fiddles with your mouse while you are away. Accessibility permission required on first launch.</span></div>
+        <div class="row"><span class="hint">fiddle, a loving tribute to Nero StartSmart. Nero fiddled while Rome burned, fiddle fiddles with your mouse while you are away. Accessibility permission required on first launch.</span></div>
       </div>`;
     toggle('m1', v=>{ p.launchAtLogin=v; send({type:'setPref', key:'launchAtLogin', value:v}); });
     toggle('m2', v=>{ p.menuBarOnly=v;   send({type:'setPref', key:'menuBarOnly',   value:v}); });
