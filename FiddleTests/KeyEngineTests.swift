@@ -52,6 +52,7 @@ final class KeyEngineTests: XCTestCase {
         waitUntil { poster.presses.count >= 2 }
         engine.stop()
         let afterStop = poster.presses.count
+        XCTAssertGreaterThan(afterStop, 0, "engine never posted; stop test would be vacuous")
         Thread.sleep(forTimeInterval: 0.15)
         XCTAssertEqual(poster.presses.count, afterStop)
     }
@@ -78,12 +79,6 @@ final class KeyEngineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(elapsed, 0.02)
     }
 
-    private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.01)
-        }
-    }
 }
 
 /// Thread-safe mock: KeyEngine posts from its own queue.

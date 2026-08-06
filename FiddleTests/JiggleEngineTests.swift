@@ -81,12 +81,6 @@ final class JiggleMathTests: XCTestCase {
         XCTAssertFalse(mover.moves.isEmpty)
     }
 
-    private func waitUntil(timeout: TimeInterval = 2, _ condition: () -> Bool) {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.01)
-        }
-    }
 }
 
 /// Thread-safe mock: the jiggle engines move from their own queue.
