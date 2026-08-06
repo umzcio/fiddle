@@ -63,6 +63,49 @@ final class FiddleController {
     private var lastMode: AutomationMode = .clicker
     private var pickPurpose: String?
 
+    /// One row per automation mode; every mode-enumerating site derives from
+    /// this table so a new case cannot ship half-wired.
+    private struct ModeDescriptor {
+        let label: String                 // modeLabel
+        let needsAccessibility: Bool      // start() guard + recheckPermissions
+        let permissionMessage: String?    // the guard's error copy
+        let pushesInitialConfig: Bool     // pushInitialState (macro: false, FOLLOWUP.md)
+    }
+
+    private static func descriptor(for mode: AutomationMode) -> ModeDescriptor {
+        switch mode {
+        case .clicker:
+            return ModeDescriptor(label: "Auto Clicker", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to click.",
+                                   pushesInitialConfig: true)
+        case .jiggler:
+            return ModeDescriptor(label: "Mouse Jiggler", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to move the mouse.",
+                                   pushesInitialConfig: true)
+        case .wakeLock:
+            return ModeDescriptor(label: "Wake Lock", needsAccessibility: false,
+                                   permissionMessage: nil,
+                                   pushesInitialConfig: true)
+        case .antiAFK:
+            return ModeDescriptor(label: "Anti-AFK", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to move the mouse.",
+                                   pushesInitialConfig: true)
+        case .recorder:
+            return ModeDescriptor(label: "Recording playback", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to play a recording.",
+                                   pushesInitialConfig: true)
+        case .macro:
+            return ModeDescriptor(label: "Macro", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to play a macro.",
+                                   // Macro configs are session-only and not pushed on boot; see FOLLOWUP.md.
+                                   pushesInitialConfig: false)
+        case .keyboard:
+            return ModeDescriptor(label: "Auto Presser", needsAccessibility: true,
+                                   permissionMessage: "Accessibility permission is required to press keys.",
+                                   pushesInitialConfig: true)
+        }
+    }
+
     /// The menu-bar icon observes this for the running state.
     var menuState: MenuState? {
         didSet { menuState?.status = status; menuState?.skin = store.settings.prefs.skin }
@@ -184,6 +227,25 @@ final class FiddleController {
         }
     }
 
+    /// Check (and prompt for, if needed) Accessibility for a mode that needs it.
+    /// Modes that do not require it (wakeLock) pass through silently.
+    private func requireAccessibility(for mode: AutomationMode) -> Bool {
+        let descriptor = Self.descriptor(for: mode)
+        guard descriptor.needsAccessibility else { return true }
+        guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
+            emitPermissions()
+            broadcast(.error(message: descriptor.permissionMessage!))
+            return false
+        }
+        return true
+    }
+
+    /// Record that a mode's run has begun: last-used mode plus running status.
+    private func began(_ mode: AutomationMode) {
+        setLastMode(mode)
+        setStatus(.running)
+    }
+
     private func start(mode: AutomationMode, config: Config) {
         // Never run engines while the recorder tap is armed: even with
         // synthesized events tagged and filtered, a recording session mixing
@@ -199,11 +261,7 @@ final class FiddleController {
         switch mode {
         case .clicker:
             // Posting synthetic clicks requires Accessibility.
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to click."))
-                return
-            }
+            guard requireAccessibility(for: .clicker) else { return }
             guard case .clicker(let clickerConfig) = config else { return }
             if clickerConfig.position == .fixed,
                !Self.pointsWithinDisplays([CGPoint(x: clickerConfig.x, y: clickerConfig.y)]) {
@@ -211,22 +269,17 @@ final class FiddleController {
                 return
             }
             clickEngine.start(config: clickerConfig)
-            setLastMode(.clicker)
-            setStatus(.running)
+            began(.clicker)
         case .jiggler:
             // Nudges are posted as real mouseMoved events, which macOS silently
             // discards without Accessibility; without this guard the LED shows
             // Running while the cursor never moves.
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to move the mouse."))
-                return
-            }
+            guard requireAccessibility(for: .jiggler) else { return }
             guard case .jiggler(let jigglerConfig) = config else { return }
             jiggleEngine.start(config: jigglerConfig)
-            setLastMode(.jiggler)
-            setStatus(.running)
+            began(.jiggler)
         case .wakeLock:
+            guard requireAccessibility(for: .wakeLock) else { return }
             guard case .wakeLock(let wl) = config else { return }
             // Both toggles off would show Running while holding no assertion.
             guard wl.keepDisplayAwake || wl.keepSystemAwake else {
@@ -234,25 +287,15 @@ final class FiddleController {
                 return
             }
             wakeLockEngine.start(config: wl)
-            setLastMode(.wakeLock)
-            setStatus(.running)
+            began(.wakeLock)
         case .antiAFK:
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to move the mouse."))
-                return
-            }
+            guard requireAccessibility(for: .antiAFK) else { return }
             guard case .antiAFK(let a) = config else { return }
             antiAFKEngine.start(config: a)
-            setLastMode(.antiAFK)
-            setStatus(.running)
+            began(.antiAFK)
         case .recorder:
             // Playback synthesizes clicks, so it needs Accessibility too.
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to play a recording."))
-                return
-            }
+            guard requireAccessibility(for: .recorder) else { return }
             guard case .recorder(let recorderConfig) = config else { return }
             let events = store.settings.recording
             guard !events.isEmpty else {
@@ -264,14 +307,9 @@ final class FiddleController {
                 return
             }
             playbackEngine.start(events: events, config: recorderConfig)
-            setLastMode(.recorder)
-            setStatus(.running)
+            began(.recorder)
         case .macro:
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to play a macro."))
-                return
-            }
+            guard requireAccessibility(for: .macro) else { return }
             guard case .macro(let macroConfig) = config else { return }
             guard let macro = store.settings.macros.first(where: { $0.id == macroConfig.macroId }) else {
                 broadcast(.error(message: "That macro was not found."))
@@ -292,14 +330,9 @@ final class FiddleController {
             if store.settings.prefs.lastMacroId != macroConfig.macroId {
                 store.setPref("lastMacroId", .string(macroConfig.macroId))
             }
-            setLastMode(.macro)
-            setStatus(.running)
+            began(.macro)
         case .keyboard:
-            guard permissions.accessibilityTrusted(promptIfNeeded: true) else {
-                emitPermissions()
-                broadcast(.error(message: "Accessibility permission is required to press keys."))
-                return
-            }
+            guard requireAccessibility(for: .keyboard) else { return }
             guard case .keyboard(let kb) = config else { return }
             guard let shortcut = HotkeyCombo.parse(kb.combo) else {
                 broadcast(.error(message: "Pick a key to press first."))
@@ -308,8 +341,7 @@ final class FiddleController {
             keyEngine.start(keyCode: CGKeyCode(shortcut.carbonKeyCode),
                             flags: KeyboardSynthesis.flags(from: shortcut.modifiers),
                             intervalMs: kb.intervalMs, repeat: kb.repeat, times: kb.times)
-            setLastMode(.keyboard)
-            setStatus(.running)
+            began(.keyboard)
         }
     }
 
@@ -464,7 +496,7 @@ final class FiddleController {
         // Engines that post events silently no-op once Accessibility is
         // revoked: the timer keeps firing and the LED shows Running while
         // nothing happens. Stop honestly instead.
-        let postsEvents: Set<AutomationMode> = [.clicker, .jiggler, .antiAFK, .recorder, .macro, .keyboard]
+        let postsEvents = AutomationMode.allCases.filter { Self.descriptor(for: $0).needsAccessibility }
         if status == .running, postsEvents.contains(lastMode), !permissions.accessibilityTrusted() {
             stopAll()
             broadcast(.error(message: "Accessibility permission was revoked, so automation was stopped."))
@@ -483,12 +515,13 @@ final class FiddleController {
     /// Push the full saved state. Scoped to the surface whose `ready` asked for
     /// it; one surface booting must not re-render (and re-fit) the other.
     private func pushInitialState(to sink: EngineEventSink? = nil) {
-        send(.config(mode: .clicker, config: .clicker(store.settings.clicker)), to: sink)
-        send(.config(mode: .jiggler, config: .jiggler(store.settings.jiggler)), to: sink)
-        send(.config(mode: .wakeLock, config: .wakeLock(store.settings.wakeLock)), to: sink)
-        send(.config(mode: .antiAFK, config: .antiAFK(store.settings.antiAFK)), to: sink)
-        send(.config(mode: .recorder, config: .recorder(store.settings.recorder)), to: sink)
-        send(.config(mode: .keyboard, config: .keyboard(store.settings.keyboard)), to: sink)
+        // .macro is deliberately excluded here (session-only; see FOLLOWUP.md).
+        // Enum declaration order (clicker, jiggler, wakeLock, antiAFK, recorder,
+        // macro, keyboard) with macro filtered out yields the same send order
+        // as the six explicit calls this replaced.
+        for mode in AutomationMode.allCases where Self.descriptor(for: mode).pushesInitialConfig {
+            send(.config(mode: mode, config: config(for: mode)), to: sink)
+        }
         emitPermissions(to: sink)
         send(prefsEvent(), to: sink)
         emitHotkeys(to: sink)
@@ -516,7 +549,11 @@ final class FiddleController {
         case (.antiAFK, .antiAFK(let a)):    store.setAntiAFK(a)
         case (.recorder, .recorder(let rc)): store.setRecorder(rc)
         case (.keyboard, .keyboard(let kb)): store.setKeyboard(kb)
-        default: return false
+        case (.macro, _):
+            // Macro repeat/times are deliberately session-only; persisting them is
+            // a deferred settings-schema decision. See FOLLOWUP.md.
+            return false
+        default: return false   // (mode, config) shape mismatch
         }
         return true
     }
@@ -692,15 +729,7 @@ final class FiddleController {
     }
 
     static func modeLabel(_ mode: AutomationMode) -> String {
-        switch mode {
-        case .clicker:  return "Auto Clicker"
-        case .jiggler:  return "Mouse Jiggler"
-        case .wakeLock: return "Wake Lock"
-        case .antiAFK:  return "Anti-AFK"
-        case .recorder: return "Recording playback"
-        case .macro:    return "Macro"
-        case .keyboard: return "Auto Presser"
-        }
+        descriptor(for: mode).label
     }
 
     /// Whether every Quartz-global point lands on a connected display. Posting

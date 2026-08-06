@@ -19,7 +19,7 @@ import Foundation
 
 // MARK: - Shared enums
 
-enum AutomationMode: String, Codable {
+enum AutomationMode: String, Codable, CaseIterable {
     case clicker
     case jiggler
     case wakeLock
