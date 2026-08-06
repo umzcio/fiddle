@@ -510,6 +510,19 @@
     .task:hover .task-ico{transform:none}
     .startorb:hover,.miniorb:hover,.winbtn:hover{transform:none}
   }
+
+  /* Undo toast: forgiveness for destructive one-click actions. */
+  #undobar{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:70;
+    display:flex;align-items:center;gap:12px;padding:8px 14px;border-radius:9px;
+    background:linear-gradient(180deg,#5b5f65,#2c2e32);color:#f1f1f3;
+    font-size:11.5px;font-weight:700;border:1px solid #15161a;
+    box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 8px 20px rgba(0,0,0,.5);
+    opacity:1;transition:opacity 200ms var(--ease-out), display 200ms allow-discrete;
+  }
+  #undobar[hidden]{display:none;opacity:0}
+  @starting-style{ #undobar{opacity:0} }
+  #undobar button{font:inherit;color:#ffd34d;background:none;border:none;cursor:pointer;text-decoration:underline;padding:0}
 </style>
 
 <div class="shell">
@@ -1084,7 +1097,14 @@
     const recBtn=document.getElementById('recBtn');
     if(recBtn) recBtn.onclick=()=>send({type: state.recordingActive ? 'recordStop' : 'recordStart'});
     const recClear=document.getElementById('recClear');
-    if(recClear) recClear.onclick=()=>send({type:'clearRecording'});
+    if(recClear) recClear.onclick=()=>{
+      if(!(state.recording||[]).length) return;
+      const kept=state.recording;
+      state.recording=[]; if(state.cat==='recorder'){ viewRecorder(); applyBanner(); }
+      showUndo('Recording cleared.',
+        ()=>{ state.recording=kept; if(state.cat==='recorder'){ viewRecorder(); applyBanner(); } },
+        ()=>send({type:'clearRecording'}));
+    };
     const recPerm=document.getElementById('recPerm');
     if(recPerm) recPerm.onclick=()=>send({type:'openSettings', pane:'inputMonitoring'});
     seg('recRepeat', v=>{r.repeat=v; persist();});
@@ -1190,7 +1210,14 @@
     const dup=document.getElementById('macroDup');
     if(dup) dup.onclick=()=>{ const m=selectedMacro(); if(!m) return; const id=macroId(); state.macros.push({id, name:m.name+' copy', steps:JSON.parse(JSON.stringify(m.steps))}); state.selectedMacro=id; saveMacros(); rerenderMacroViews(); };
     const del=document.getElementById('macroDel');
-    if(del) del.onclick=()=>{ const m=selectedMacro(); if(!m) return; state.macros=state.macros.filter(x=>x.id!==m.id); state.selectedMacro=state.macros[0]?state.macros[0].id:null; saveMacros(); rerenderMacroViews(); };
+    if(del) del.onclick=()=>{ const m=selectedMacro(); if(!m) return;
+      const idx=state.macros.indexOf(m);
+      state.macros=state.macros.filter(x=>x.id!==m.id);
+      state.selectedMacro=state.macros[0]?state.macros[0].id:null;
+      saveMacros(); rerenderMacroViews();
+      showUndo(`Macro "${m.name}" deleted.`,
+        ()=>{ state.macros.splice(Math.min(idx,state.macros.length),0,m); state.selectedMacro=m.id; saveMacros(); rerenderMacroViews(); });
+    };
   }
   function rerenderMacroViews(){ if(state.cat==='sequencer'){ viewSequencer(); applyBanner(); } if(state.cat==='macro'){ viewMacroPlayer(); applyBanner(); } }
   function reorderStep(i,dir){ const m=selectedMacro(); if(!m) return; const j=i+dir; if(j<0||j>=m.steps.length) return; const t=m.steps[i]; m.steps[i]=m.steps[j]; m.steps[j]=t; saveMacros(); viewSequencer(); applyBanner(); }
@@ -1248,7 +1275,14 @@
       </div>`;
     const sel=document.getElementById('mpSel'); if(sel) sel.onchange=()=>{ state.selectedMacro=sel.value; viewMacroPlayer(); applyBanner(); };
     const dup=document.getElementById('mpDup'); if(dup) dup.onclick=()=>{ const mm=selectedMacro(); if(!mm) return; const id=macroId(); state.macros.push({id, name:mm.name+' copy', steps:JSON.parse(JSON.stringify(mm.steps))}); state.selectedMacro=id; saveMacros(); rerenderMacroViews(); };
-    const del=document.getElementById('mpDel'); if(del) del.onclick=()=>{ const mm=selectedMacro(); if(!mm) return; state.macros=state.macros.filter(x=>x.id!==mm.id); state.selectedMacro=state.macros[0]?state.macros[0].id:null; saveMacros(); rerenderMacroViews(); };
+    const del=document.getElementById('mpDel'); if(del) del.onclick=()=>{ const mm=selectedMacro(); if(!mm) return;
+      const idx=state.macros.indexOf(mm);
+      state.macros=state.macros.filter(x=>x.id!==mm.id);
+      state.selectedMacro=state.macros[0]?state.macros[0].id:null;
+      saveMacros(); rerenderMacroViews();
+      showUndo(`Macro "${mm.name}" deleted.`,
+        ()=>{ state.macros.splice(Math.min(idx,state.macros.length),0,mm); state.selectedMacro=mm.id; saveMacros(); rerenderMacroViews(); });
+    };
     seg('mpRepeat', v=>r.repeat=v);
     bind('mpTimes', v=>r.times=+v||1);
   }
@@ -1276,7 +1310,16 @@
           <span class="hint">captures clicker, jiggler, wake lock, anti-AFK, keyboard + device</span></div>
       </div>`;
     content.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>send({type:'applyProfile', id:b.dataset.apply}));
-    content.querySelectorAll('[data-delp]').forEach(b=>b.onclick=()=>{ state.profiles=state.profiles.filter(p=>p.id!==b.dataset.delp); send({type:'saveProfiles', profiles:state.profiles}); viewProfiles(); applyBanner(); });
+    content.querySelectorAll('[data-delp]').forEach(b=>b.onclick=()=>{
+      const idx=state.profiles.findIndex(p=>p.id===b.dataset.delp);
+      if(idx<0) return;
+      const p=state.profiles[idx];
+      state.profiles=state.profiles.filter(x=>x.id!==p.id);
+      send({type:'saveProfiles', profiles:state.profiles});
+      viewProfiles(); applyBanner();
+      showUndo(`Profile "${p.name}" deleted.`,
+        ()=>{ state.profiles.splice(Math.min(idx,state.profiles.length),0,p); send({type:'saveProfiles', profiles:state.profiles}); if(state.cat==='profiles'){ viewProfiles(); applyBanner(); } });
+    });
     document.getElementById('profSave').onclick=saveCurrentProfile;
   }
   // Shared by the Profiles view button and the dock save orb.
@@ -1646,6 +1689,32 @@
     applyBanner();
     if(state.cat==='recorder'){ viewRecorder(); applyBanner(); }
   }
+
+  // ---------- undo toast (forgiveness for destructive one-click actions) ----------
+  // One slot: a new destructive action finalizes any pending one first.
+  let undoState=null; // {label, onUndo, onExpire, timer}
+  function showUndo(label, onUndo, onExpire){
+    finalizeUndo();
+    let bar=document.getElementById('undobar');
+    if(!bar){
+      bar=document.createElement('div'); bar.id='undobar';
+      document.body.appendChild(bar);
+    }
+    bar.hidden=false;
+    bar.innerHTML=`<span>${esc(label)}</span><button id="undoBtn">Undo</button>`;
+    document.getElementById('undoBtn').onclick=()=>{
+      const u=undoState; undoState=null; clearTimeout(u.timer);
+      bar.hidden=true; u.onUndo();
+    };
+    undoState={label, onUndo, onExpire, timer:setTimeout(()=>{ finalizeUndo(); }, 6000)};
+  }
+  function finalizeUndo(){
+    if(!undoState) return;
+    const u=undoState; undoState=null; clearTimeout(u.timer);
+    const bar=document.getElementById('undobar'); if(bar) bar.hidden=true;
+    if(u.onExpire) u.onExpire();
+  }
+  window.addEventListener('pagehide', finalizeUndo);
 
   // The scroll content (#content) is absolutely positioned, so the banner must
   // live INSIDE it as the first child to push the task list down rather than
