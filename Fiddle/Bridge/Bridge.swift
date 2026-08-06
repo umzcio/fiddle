@@ -64,10 +64,14 @@ final class FiddleBridge: NSObject {
         webView.navigationDelegate = self
         // Transparent background so the rounded shell shows through the
         // borderless window. underPageBackgroundColor is the public control
-        // (macOS 12+); the legacy drawsBackground poke stays only as a guarded
-        // fallback and can never throw an unknown-key exception at launch.
+        // (macOS 12+); the drawsBackground poke is what actually stops WebKit
+        // painting its white base. KVC resolves the key through the underscored
+        // SPI setter (_setDrawsBackground:), so the crash-guard must check THAT
+        // selector; checking only the public-style name skips the poke and the
+        // window grows a white ring (shipped briefly in 1.0.6).
         webView.underPageBackgroundColor = .clear
-        if webView.responds(to: NSSelectorFromString("setDrawsBackground:")) {
+        if webView.responds(to: NSSelectorFromString("_setDrawsBackground:"))
+            || webView.responds(to: NSSelectorFromString("setDrawsBackground:")) {
             webView.setValue(false, forKey: "drawsBackground")
         }
 
