@@ -40,6 +40,14 @@
     --orb-green1:#bdf06a;--orb-green2:#3f8b16;
     --font-ui:"Tahoma","Geneva","Verdana",sans-serif;
     --font-disp:"Trebuchet MS","Tahoma",sans-serif;
+
+    /* Motion tokens. --ease-out for press/enter/exit feedback, --ease-in-out
+       for things that morph or travel on screen. Two durations only: --dur-fast
+       for hover/decorative, --dur-press for press release. */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --dur-fast: 120ms;
+    --dur-press: 160ms;
   }
 
   /* ===== skins: only these accent variables change; chrome/layout stay fixed ===== */
@@ -158,7 +166,7 @@
     background:linear-gradient(180deg,var(--ac-c1),var(--ac-c2));
     border:1px solid #4d0303;
     box-shadow:0 1px 0 rgba(255,255,255,.4) inset;
-    color:#fff;font-size:9px;transition:transform .12s;
+    color:#fff;font-size:9px;transition:transform var(--dur-fast) var(--ease-in-out);
   }
   .selector.open .caret{transform:rotate(180deg)}
   /* custom themed dropdown menu (replaces the native system popup) */
@@ -191,9 +199,9 @@
     background:radial-gradient(circle at 35% 28%, #ffffff, #cfd2d7 45%, #9a9ea4 100%);
     box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 2px 4px rgba(0,0,0,.35);
     display:grid;place-items:center;color:#3a3d41;font-size:13px;font-weight:700;
-    transition:transform .07s;
+    transition:transform var(--dur-press) var(--ease-out);
   }
-  .winbtn:active{transform:translateY(1px)}
+  .winbtn:active{transform:translateY(1px);transition-duration:100ms}
   .winbtn.help{font-family:var(--font-disp)}
 
   /* ============ RED STAGE ============ */
@@ -222,7 +230,7 @@
   .cat{
     width:54px;height:50px;border:none;background:transparent;cursor:pointer;
     display:flex;align-items:center;justify-content:center;border-radius:10px;
-    position:relative;transition:transform .08s;
+    position:relative;transition:transform var(--dur-fast) var(--ease-out);
   }
   /* glossy raised silver tile behind the icon, the Nero selected-button look */
   .cat::before{
@@ -230,7 +238,7 @@
     background:linear-gradient(180deg,#fbfcfd 0%,#e4e7ec 46%,#bcc1c9 100%);
     border:1px solid rgba(0,0,0,.32);
     box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 -2px 3px rgba(0,0,0,.18) inset,0 2px 4px rgba(0,0,0,.4);
-    opacity:0;transform:scale(.82);transition:opacity .12s,transform .12s;
+    opacity:0;transform:scale(.94);transition:opacity var(--dur-fast) var(--ease-out),transform var(--dur-fast) var(--ease-out);
     pointer-events:none;
   }
   .cat.spacer::before{content:none}
@@ -310,7 +318,7 @@
   }
   .task:hover .task-ico{transform:scale(1.06)}
   .task:hover .task-t{text-decoration:underline}
-  .task-ico{width:48px;height:48px;flex:none;transition:transform .1s;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))}
+  .task-ico{width:48px;height:48px;flex:none;transition:transform var(--dur-fast) var(--ease-out);filter:drop-shadow(0 3px 3px rgba(0,0,0,.45))}
   .task-t{font-family:var(--font-disp);font-weight:700;font-size:17px;color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.4)}
   .task-s{font-size:11.5px;color:rgba(255,255,255,.8);margin-top:1px}
 
@@ -364,8 +372,9 @@
   .keycap.capturing{background:linear-gradient(180deg,#fff7d6,#f3e08a);border-color:#b9962a;color:#5a4708}
   .btn-reset{font-family:var(--font-ui);font-size:11px;color:#1c2128;cursor:pointer;
     background:linear-gradient(180deg,#f3f4f6,#cfd2d7 60%,#a7abb2);border:1px solid #6f7378;
-    border-radius:6px;padding:4px 12px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset}
-  .btn-reset:active{transform:translateY(1px)}
+    border-radius:6px;padding:4px 12px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset;
+    transition:transform var(--dur-press) var(--ease-out)}
+  .btn-reset:active{transform:translateY(1px);transition-duration:100ms}
   .skins{display:flex;gap:10px;align-items:center}
   .swatch{width:30px;height:30px;border-radius:8px;cursor:pointer;position:relative;
     border:1px solid rgba(0,0,0,.45);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 2px 4px rgba(0,0,0,.35)}
@@ -404,7 +413,7 @@
       0 -7px 9px rgba(0,0,0,.32) inset,          /* shaded bottom */
       0 2px 1px rgba(255,255,255,.55) inset,     /* lit top edge */
       0 2px 5px rgba(0,0,0,.5);                   /* drop shadow */
-    transition:transform .07s;
+    transition:transform var(--dur-press) var(--ease-out);
   }
   /* glossy specular sheen across the top, the Nero candy-button look */
   .miniorb::before{
@@ -414,19 +423,19 @@
     pointer-events:none;
   }
   .miniorb:hover{transform:translateY(-1px)}
-  .miniorb:active{transform:translateY(1px)}
+  .miniorb:active{transform:translateY(1px);transition-duration:100ms}
   .miniorb.save{background:linear-gradient(180deg,#a6ec63 0%,#5cb22b 46%,#2c7d14 100%)}
   .miniorb.info{background:linear-gradient(180deg,#c4e8ff 0%,#3f9be6 46%,#175f9c 100%)}
   .miniorb svg{position:relative;z-index:1;width:18px;height:18px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.45))}
 
   .startorb{
     width:66px;height:66px;border:none;background:transparent;padding:0;cursor:pointer;border-radius:50%;
-    display:grid;place-items:center;transition:transform .08s;position:relative;
+    display:grid;place-items:center;transition:transform var(--dur-press) var(--ease-out);position:relative;
     filter:drop-shadow(0 4px 9px rgba(0,0,0,.55));
   }
   .startorb img{width:66px;height:66px;display:block;pointer-events:none}
   .startorb:hover{transform:translateY(-1px)}
-  .startorb:active{transform:translateY(2px)}
+  .startorb:active{transform:translateY(2px);transition-duration:100ms}
   .startorb.running{animation:ignite 1.15s ease-in-out infinite}
   @keyframes ignite{
     0%,100%{filter:drop-shadow(0 4px 9px rgba(0,0,0,.55)) drop-shadow(0 0 6px rgba(255,140,40,.6))}
