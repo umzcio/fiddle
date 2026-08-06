@@ -22,6 +22,7 @@
 		0A0000000000000000000098 /* HotkeyComboTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000099 /* HotkeyComboTests.swift */; };
 		0A000000000000000000009C /* RecordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000009D /* RecordingTests.swift */; };
 		0A00000000000000000000B4 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000B5 /* TestSupport.swift */; };
+		0A00000000000000000000B6 /* ClickRecorderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000B7 /* ClickRecorderTests.swift */; };
 		0A00000000000000000000A0 /* PlaybackEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000A1 /* PlaybackEngineTests.swift */; };
 		0A00000000000000000000A6 /* MacroTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000A7 /* MacroTests.swift */; };
 		0A00000000000000000000AA /* KeyEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000AB /* KeyEngineTests.swift */; };
@@ -76,6 +77,7 @@
 		0A0000000000000000000099 /* HotkeyComboTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyComboTests.swift; sourceTree = "<group>"; };
 		0A000000000000000000009D /* RecordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingTests.swift; sourceTree = "<group>"; };
 		0A00000000000000000000B5 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		0A00000000000000000000B7 /* ClickRecorderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickRecorderTests.swift; sourceTree = "<group>"; };
 		0A00000000000000000000A1 /* PlaybackEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngineTests.swift; sourceTree = "<group>"; };
 		0A00000000000000000000A7 /* MacroTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacroTests.swift; sourceTree = "<group>"; };
 		0A00000000000000000000AB /* KeyEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEngineTests.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				0A00000000000000000000A7 /* MacroTests.swift */,
 				0A00000000000000000000AB /* KeyEngineTests.swift */,
 				0A00000000000000000000B5 /* TestSupport.swift */,
+				0A00000000000000000000B7 /* ClickRecorderTests.swift */,
 			);
 			path = FiddleTests;
 			sourceTree = "<group>";
@@ -375,6 +378,7 @@
 				0A00000000000000000000A6 /* MacroTests.swift in Sources */,
 				0A00000000000000000000AA /* KeyEngineTests.swift in Sources */,
 				0A00000000000000000000B4 /* TestSupport.swift in Sources */,
+				0A00000000000000000000B6 /* ClickRecorderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

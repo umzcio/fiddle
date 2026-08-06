@@ -16,6 +16,11 @@ import Foundation
 /// read back by the recorder tap so the app never records its own output.
 enum SyntheticEvents {
     static let userDataTag: Int64 = 0xF1DD1E
+
+    /// True when the event carries fiddle's own marker and must be ignored.
+    static func isOwn(_ event: CGEvent) -> Bool {
+        event.getIntegerValueField(.eventSourceUserData) == userDataTag
+    }
 }
 
 @MainActor
@@ -40,10 +45,17 @@ final class ClickRecorder {
 
     var isRecording: Bool { tap != nil }
 
-    func start() {
-        _ = stop()
+    /// Reset the capture buffer and timing baseline. Called by `start()` before
+    /// the tap is created; exposed so tests can exercise `ingest` without a
+    /// real event tap.
+    func beginBuffering() {
         events = []
         lastTimestampNs = DispatchTime.now().uptimeNanoseconds
+    }
+
+    func start() {
+        _ = stop()
+        beginBuffering()
 
         let mask: CGEventMask =
             (1 << CGEventType.leftMouseDown.rawValue)  | (1 << CGEventType.leftMouseUp.rawValue) |
@@ -67,7 +79,7 @@ final class ClickRecorder {
                 guard let refcon else { return Unmanaged.passUnretained(event) }
                 // Drop fiddle's own synthesized events; recording them would
                 // feed the app's output back in as if it were user input.
-                if event.getIntegerValueField(.eventSourceUserData) == SyntheticEvents.userDataTag {
+                if SyntheticEvents.isOwn(event) {
                     return Unmanaged.passUnretained(event)
                 }
                 let recorder = Unmanaged<ClickRecorder>.fromOpaque(refcon).takeUnretainedValue()
@@ -102,7 +114,16 @@ final class ClickRecorder {
     }
 
     private func capture(type: CGEventType, location: CGPoint, clickState: Int) {
-        guard isRecording, let mapped = RecordEventMapping.event(for: type) else { return }
+        guard isRecording else { return }
+        ingest(type: type, location: location, clickState: clickState)
+    }
+
+    /// Test seam: everything capture() does after the is-a-tap-live check.
+    /// Returns without effect for unmapped event types, excluded points, and
+    /// once the cap is reached; fires onLimitReached exactly once, when the
+    /// cap is first hit.
+    func ingest(type: CGEventType, location: CGPoint, clickState: Int) {
+        guard let mapped = RecordEventMapping.event(for: type) else { return }
         if exclude?(location) == true { return }
         guard events.count < Self.maxEvents else { return }
         let now = DispatchTime.now().uptimeNanoseconds
