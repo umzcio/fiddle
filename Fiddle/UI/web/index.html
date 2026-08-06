@@ -361,9 +361,9 @@
   .toggle{position:relative;width:46px;height:24px;border-radius:999px;cursor:pointer;
     background:linear-gradient(180deg,#5a5d63,#2e3034);border:1px solid #1c1d20;box-shadow:0 1px 2px rgba(0,0,0,.4) inset}
   .toggle .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
-    background:radial-gradient(circle at 35% 30%,#fff,#c6c9ce);box-shadow:0 1px 2px rgba(0,0,0,.4);transition:left .15s}
+    background:radial-gradient(circle at 35% 30%,#fff,#c6c9ce);box-shadow:0 1px 2px rgba(0,0,0,.4);transition:transform 150ms var(--ease-in-out)}
   .toggle.on{background:linear-gradient(180deg,#7be23a,#2c8b16)}
-  .toggle.on .knob{left:26px}
+  .toggle.on .knob{transform:translateX(24px)}
 
   .keycap{font-family:var(--font-disp);font-weight:700;font-size:12px;color:#15181c;
     background:linear-gradient(180deg,#fff,#dfe2e7);border:1px solid #6c7682;
