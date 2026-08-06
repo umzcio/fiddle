@@ -1,6 +1,13 @@
 <html lang="en">
 <!-- Fiddle - a Nero StartSmart styled auto-clicker / mouse jiggler mockup -->
 <meta charset="utf-8">
+<!-- Containment: this page holds the input-synthesis bridge. Inline code
+     stays allowed (the app's own script/style); everything remote, framed,
+     or plugin-shaped is blocked so an injection bug cannot phone home or
+     load a payload. Tightening script-src to 'self' requires externalizing
+     the script and a visual pass; see plans/026. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fiddle</title>
 <style>
