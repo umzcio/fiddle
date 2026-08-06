@@ -41,7 +41,7 @@ final class PositionPicker {
                 // Ignore fiddle's own synthesized clicks: with the clicker
                 // running, one of its posts could otherwise satisfy the pick
                 // instead of the user's click.
-                if event.getIntegerValueField(.eventSourceUserData) == SyntheticEvents.userDataTag {
+                if SyntheticEvents.isOwn(event) {
                     return Unmanaged.passUnretained(event)
                 }
                 let picker = Unmanaged<PositionPicker>.fromOpaque(refcon).takeUnretainedValue()
