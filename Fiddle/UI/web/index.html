@@ -484,6 +484,20 @@
     outline:none;
     box-shadow:0 0 0 2px #1c1d20, 0 0 0 4px #ffd34d;
   }
+
+  /* Reduced motion: fewer and gentler, not zero. State signals stay (solid
+     LED color, steady glow, press feedback); pulsing and decorative travel
+     go. */
+  @media (prefers-reduced-motion: reduce){
+    /* running glow: hold steady instead of pulsing */
+    .startorb.running::after{animation:none;opacity:1}
+    /* status LED: solid green instead of 1 Hz flashing */
+    .led.live{animation:none}
+    /* decorative hover travel */
+    .cat:hover:not(.active){transform:none}
+    .task:hover .task-ico{transform:none}
+    .startorb:hover,.miniorb:hover,.winbtn:hover{transform:none}
+  }
 </style>
 
 <div class="shell">
