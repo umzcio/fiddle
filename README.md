@@ -167,6 +167,8 @@ fiddle is an affectionate homage to the Nero StartSmart launcher and its era of 
 
 Issues and pull requests are welcome. Please keep the Nero look identical and follow the existing conventions (American spelling, no em dashes in user-facing copy).
 
+Before changing code, read [AGENTS.md](AGENTS.md) for the architecture, the web-to-native bridge contract, and the macOS platform constraints (event synthesis, timing, permissions, and why the app cannot be sandboxed).
+
 ## License
 
 [MIT](LICENSE). Use it, fork it, keep the flame.
