@@ -10,15 +10,22 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Build and test
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check Xcode target membership
+        run: bash .github/scripts/check-target-membership.sh
 
       - name: Cache SwiftPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: build/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('Fiddle.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
@@ -36,6 +43,56 @@ jobs:
             -derivedDataPath build \
             -clonedSourcePackagesDirPath build/SourcePackages \
             -destination 'platform=macOS' \
+            -enableCodeCoverage YES \
+            -resultBundlePath build/Fiddle.xcresult \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="" \
+            test
+
+      - name: Coverage report
+        if: success()
+        run: xcrun xccov view --report --only-targets build/Fiddle.xcresult
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results
+          path: build/Fiddle.xcresult
+          retention-days: 7
+
+  # Non-blocking until its reports are triaged. The repo has a documented
+  # unresolved race (see FOLLOWUP.md, PlaybackEngine compensating mouse-ups).
+  tsan:
+    name: Thread sanitizer (non-blocking)
+    runs-on: macos-15
+    timeout-minutes: 40
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: build/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Fiddle.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Resolve dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Fiddle.xcodeproj \
+            -clonedSourcePackagesDirPath build/SourcePackages
+
+      - name: Build and test with Thread Sanitizer
+        run: |
+          xcodebuild -scheme Fiddle -configuration Debug \
+            -derivedDataPath build \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            -destination 'platform=macOS' \
+            -enableThreadSanitizer YES \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_STYLE=Automatic \
