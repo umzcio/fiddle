@@ -11,6 +11,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fiddle</title>
 <style>
+  /* Typed so they can interpolate on skin switch; see the body transition. */
+  @property --ac-glow { syntax:'<color>'; inherits:true; initial-value:#e2381f; }
+  @property --ac-bri { syntax:'<color>'; inherits:true; initial-value:#bf1410; }
+  @property --ac-mid { syntax:'<color>'; inherits:true; initial-value:#7e0606; }
+  @property --ac-dk { syntax:'<color>'; inherits:true; initial-value:#350202; }
+  @property --ac-edge { syntax:'<color>'; inherits:true; initial-value:#2c0303; }
+  @property --ac-c1 { syntax:'<color>'; inherits:true; initial-value:#e4453a; }
+  @property --ac-c2 { syntax:'<color>'; inherits:true; initial-value:#7e0606; }
+
   :root{
     --chrome-hi:#f3f4f6;
     --chrome-lt:#dfe1e6;
@@ -106,6 +115,9 @@
     padding:10px 11px 15px;
     color:var(--ink);
     -webkit-font-smoothing:antialiased;
+    transition: --ac-glow 200ms ease, --ac-bri 200ms ease, --ac-mid 200ms ease,
+                --ac-dk 200ms ease, --ac-edge 200ms ease, --ac-c1 200ms ease,
+                --ac-c2 200ms ease;
   }
 
   /* ============ OUTER CHROME SHELL ============ */
