@@ -706,6 +706,17 @@
     border:1px solid #1c1d20;color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.3) inset}
   .about-gh{background:linear-gradient(180deg,var(--ac-c1),var(--ac-c2))}
   .about-close{background:linear-gradient(180deg,#5b5f65,#2c2e32)}
+
+  /* Accessibility material signals: solidify the one translucent surface
+     under reduced transparency; strengthen the dialog edge under high
+     contrast. */
+  @media (prefers-reduced-transparency: reduce){
+    .about-overlay{background:rgba(10,12,16,.92)}
+  }
+  @media (prefers-contrast: more){
+    .about-card{border:2px solid #1c2128}
+    #permbar{border-width:2px}
+  }
 </style>
 
 <script>
