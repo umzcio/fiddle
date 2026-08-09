@@ -28,4 +28,14 @@ hdiutil create \
     "$DMG" >/dev/null
 
 rm -rf "$STAGE"
+
+# Sign the dmg itself. The app inside carries the stapled ticket Gatekeeper
+# checks at launch, so an unsigned dmg WORKS, but it assesses as
+# "rejected, source=no usable signature" under spctl, indistinguishable from
+# a broken artifact. Signing before notarization flips the assessment to
+# "accepted, source=Notarized Developer ID". Shipped unsigned through 1.0.7.
+echo "==> Signing $DMG"
+codesign --force --timestamp --sign "Developer ID Application" "$DMG"
+codesign -dv "$DMG" >/dev/null 2>&1 || { echo "error: dmg signing failed"; exit 1; }
+
 echo "==> Done: $DMG"
