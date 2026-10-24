@@ -35,7 +35,9 @@ rm -rf "$STAGE"
 # a broken artifact. Signing before notarization flips the assessment to
 # "accepted, source=Notarized Developer ID". Shipped unsigned through 1.0.7.
 echo "==> Signing $DMG"
-codesign --force --timestamp --sign "Developer ID Application" "$DMG"
+# Pinned to the team that signs the app; a bare "Developer ID Application"
+# is ambiguous once a second Developer ID cert is in the keychain.
+codesign --force --timestamp --sign "Developer ID Application: The University of Montana (5JJ6G6A84S)" "$DMG"
 codesign -dv "$DMG" >/dev/null 2>&1 || { echo "error: dmg signing failed"; exit 1; }
 
 echo "==> Done: $DMG"
