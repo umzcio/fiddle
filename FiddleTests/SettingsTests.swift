@@ -178,6 +178,18 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(s.clicker.intervalMs, 100)
     }
 
+    // A tampered blob must not carry markup into the page through a library id.
+    // The hostile entry is dropped like any other corrupt element.
+    func testHostileLibraryIdsAreDropped() throws {
+        let blob = #"""
+        {"profiles":[{"id":"p1","name":"Good","device":"mouse"}, {"id":"\"><img src=x onerror=alert(1)>","name":"Bad","device":"mouse"}],
+         "macros":[{"id":"m1\" onmouseover=\"x","name":"Bad","steps":[]}, {"id":"m2","name":"Good","steps":[]}]}
+        """#
+        let s = try JSONDecoder().decode(Settings.self, from: Data(blob.utf8))
+        XCTAssertEqual(s.profiles.map(\.id), ["p1"])
+        XCTAssertEqual(s.macros.map(\.id), ["m2"])
+    }
+
     func testRecorderConfigRoundTripAndLegacyDecode() throws {
         var s = Settings.default
         s.recorder = RecorderConfig(repeat: .times, times: 9)

@@ -26,7 +26,7 @@ extension Profile {
     private enum CodingKeys: String, CodingKey { case id, name, clicker, jiggler, wakeLock, antiAFK, keyboard, device }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id       = try c.decodeIfPresent(String.self,        forKey: .id)       ?? ""
+        id       = try LibraryID.decode(from: c, forKey: .id)
         name     = try c.decodeIfPresent(String.self,        forKey: .name)     ?? ""
         clicker  = try c.decodeIfPresent(ClickerConfig.self, forKey: .clicker)  ?? ClickerConfig(intervalMs: 100, button: .left, clickType: .single, repeat: .until, times: 50, position: .current, x: 640, y: 480)
         jiggler  = try c.decodeIfPresent(JigglerConfig.self, forKey: .jiggler)  ?? JigglerConfig(intervalSec: 30, distancePx: 40, mode: .zen, keepAwake: true, idleOnly: true)

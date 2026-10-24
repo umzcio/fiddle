@@ -22,7 +22,8 @@ Fiddle/
   UI/
     MainWindow.swift        borderless window host
     MenuBar.swift           status item and popover
-    web/index.html          the entire live UI, one file
+    web/index.html          the live UI markup and styles
+    web/app.js              the live UI script (external so the CSP forbids inline script)
   Bridge/
     Bridge.swift            WKScriptMessageHandler, owns the web view
     Protocol.swift          Codable Command and Event types, the contract
@@ -54,7 +55,7 @@ Swift to web, via `webView.evaluateJavaScript("window.fiddleEvent(<json>)")`:
 
 `Fiddle/Bridge/Protocol.swift` is the authoritative definition of both halves.
 If you change a message, change it there first and keep the JS in
-`Fiddle/UI/web/index.html` in step.
+`Fiddle/UI/web/app.js` in step.
 
 Numbers crossing the bridge are decoded as Swift `Int`. A fractional JSON
 number fails the decode and the whole command is dropped silently, so the web

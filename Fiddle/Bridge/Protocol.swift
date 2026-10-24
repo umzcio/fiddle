@@ -10,7 +10,7 @@
 //    Command  = web  -> Swift   (decoded from message.body)
 //    Event    = Swift -> web     (encoded, then handed to evaluateJavaScript)
 //
-//  The matching JS half (in Fiddle/UI/web/index.html) must:
+//  The matching JS half (in Fiddle/UI/web/app.js) must:
 //    - send:    window.webkit.messageHandlers.fiddle.postMessage({ type: "...", ... })
 //    - receive: window.fiddleEvent = (e) => { switch (e.type) { ... } }
 //

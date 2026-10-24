@@ -138,6 +138,13 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(macros[0].steps.first?.kind, .wait)
     }
 
+    func testDecodeSaveRejectsHostileLibraryIds() throws {
+        let macros = #"{"type":"saveMacros","macros":[{"id":"m1<script>","name":"A","steps":[]}]}"#
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: try object(macros)))
+        let profiles = #"{"type":"saveProfiles","profiles":[{"id":"p1\" x=\"","name":"A","device":"mouse"}]}"#
+        XCTAssertThrowsError(try Bridge.decodeCommand(from: try object(profiles)))
+    }
+
     func testDecodeStartMacro() throws {
         let cmd = try Bridge.decodeCommand(from: try object(#"{"type":"start","mode":"macro","config":{"macroId":"m1","repeat":"times","times":2}}"#))
         guard case .start(let mode, let config) = cmd, mode == .macro, case .macro(let cfg) = config else { return XCTFail() }

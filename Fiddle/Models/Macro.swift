@@ -26,6 +26,25 @@ struct Macro: Codable, Equatable {
     var steps: [MacroStep]
 }
 
+/// Macro and profile ids are opaque tokens (the page mints `m<N>` / `p<N>`).
+/// The page interpolates them into markup, so anything outside a plain token
+/// alphabet is rejected at decode time, from the settings blob or the bridge.
+enum LibraryID {
+    static func isValid(_ id: String) -> Bool {
+        id.count <= 64 && id.unicodeScalars.allSatisfy {
+            ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "_" || $0 == "-"
+        }
+    }
+
+    static func decode<K: CodingKey>(from c: KeyedDecodingContainer<K>, forKey key: K) throws -> String {
+        let id = try c.decodeIfPresent(String.self, forKey: key) ?? ""
+        guard isValid(id) else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: c, debugDescription: "id is not a plain token")
+        }
+        return id
+    }
+}
+
 // MARK: - Lenient decoders
 
 extension MacroStep {
@@ -45,7 +64,7 @@ extension Macro {
     private enum CodingKeys: String, CodingKey { case id, name, steps }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id    = try c.decodeIfPresent(String.self,      forKey: .id)    ?? ""
+        id    = try LibraryID.decode(from: c, forKey: .id)
         name  = try c.decodeIfPresent(String.self,      forKey: .name)  ?? ""
         steps = try c.decodeIfPresent([MacroStep].self, forKey: .steps) ?? []
     }
