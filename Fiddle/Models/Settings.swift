@@ -3,8 +3,8 @@
 //  Fiddle
 //
 //  The single Codable value that persists user configuration. Hotkey bindings
-//  are persisted separately by the KeyboardShortcuts package, so they are not
-//  duplicated here.
+//  are persisted by the KeyboardShortcuts package; the store only keeps a
+//  sealed copy of them in HotkeyTrust to detect changes made outside fiddle.
 //
 
 import CryptoKit
@@ -128,75 +128,101 @@ struct Settings: Codable, Equatable {
 /// Loads and persists `Settings` as JSON in UserDefaults, sealed with a
 /// Keychain-held key (see SettingsSeal.swift).
 final class SettingsStore {
+    /// How settings that could not be verified came to be loaded.
+    enum Adoption: Equatable {
+        /// Brought over from fiddle's earlier bundle id, whose seal key this
+        /// signing identity cannot read.
+        case inherited
+        /// Found without a valid seal under fiddle's own id (key deleted or
+        /// unreadable).
+        case unverified
+    }
+
     private static let key = "fiddle.settings.v1"
     private static let sealKey = key + ".seal"
-    private static let armedKey = key + ".armed"
+    private static let trustKey = key + ".trust"
+    /// fiddle's bundle id before 1.1.0. Its settings are imported once.
+    static let legacySuite = "edu.umontana.fiddle"
+
     private let defaults: UserDefaults
     private(set) var settings: Settings
+    private(set) var trust: HotkeyTrust = .full
     /// True when the saved blob could not be decoded and defaults were used.
     /// The controller surfaces this to the user once, then acknowledges it.
     private(set) var didResetToDefaults = false
     /// True when the saved blob was changed outside fiddle and was discarded.
     /// Surfaced once like `didResetToDefaults`.
     private(set) var didRejectTamperedSettings = false
-    /// Whether the Start/Stop hotkey may start the stored target. False after
-    /// settings are adopted without a valid seal (upgrade, or a deleted key)
-    /// until the user starts something from fiddle's own UI.
-    private(set) var hotkeyArmed = false
+    /// Set when settings were loaded without a valid seal. Surfaced once.
+    private(set) var adoption: Adoption?
     /// The Keychain key could not be read; changes this session are not saved,
     /// so a good sealed blob is never replaced by one the next launch rejects.
     var isSealUnavailable: Bool { sealingKey == nil }
+    /// The XCTest host's throwaway store. Hotkey bindings live in the real
+    /// defaults domain, so the controller must not enforce them against it.
+    let isScratch: Bool
     private var sealingKey: SymmetricKey?
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "settings")
+    private let log = Logger(subsystem: "com.zapps.fiddle", category: "settings")
 
     convenience init() {
         // As the XCTest host the app must not touch the user's real settings or
-        // create the real Keychain key: an installed older fiddle would keep
-        // writing unsealed changes that the next sealed launch rejects.
+        // create the real Keychain key: an installed fiddle would then reject
+        // its own settings at the next launch.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil,
-           let scratch = UserDefaults(suiteName: "edu.umontana.fiddle.testhost") {
-            scratch.removePersistentDomain(forName: "edu.umontana.fiddle.testhost")
-            self.init(defaults: scratch, keys: EphemeralSettingsKey())
+           let scratch = UserDefaults(suiteName: "com.zapps.fiddle.testhost") {
+            scratch.removePersistentDomain(forName: "com.zapps.fiddle.testhost")
+            self.init(defaults: scratch, keys: EphemeralSettingsKey(), isScratch: true)
             return
         }
-        self.init(defaults: .standard, keys: KeychainSettingsKey())
+        self.init(defaults: .standard, keys: KeychainSettingsKey(), legacy: UserDefaults(suiteName: Self.legacySuite))
     }
 
-    init(defaults: UserDefaults, keys: SettingsKeyStore) {
+    init(defaults: UserDefaults, keys: SettingsKeyStore, legacy: UserDefaults? = nil, isScratch: Bool = false) {
         self.defaults = defaults
+        self.isScratch = isScratch
         self.settings = .default
-        let data = defaults.data(forKey: Self.key)
+        let own = defaults.data(forKey: Self.key)
+        let inherited = own == nil ? legacy?.data(forKey: Self.key) : nil
 
         switch keys.loadKey() {
         case .found(let key):
             sealingKey = key
-            guard let data else {
-                hotkeyArmed = true      // nothing stored; defaults hold no planted target
-                return
-            }
-            let armed = defaults.bool(forKey: Self.armedKey)
-            if let seal = defaults.data(forKey: Self.sealKey),
-               SettingsSeal.verify(data, armed: armed, seal: seal, key: key) {
-                settings = decode(data)
-                hotkeyArmed = armed
-            } else {
-                log.error("settings seal did not verify; discarding the stored blob")
-                didRejectTamperedSettings = true
-                defaults.set(data, forKey: Self.key + ".rejected")
+            if let own {
+                let state = defaults.data(forKey: Self.trustKey) ?? Data()
+                if let seal = defaults.data(forKey: Self.sealKey),
+                   SettingsSeal.verify(own, state: state, seal: seal, key: key),
+                   let stored = try? JSONDecoder().decode(HotkeyTrust.self, from: state) {
+                    settings = decode(own)
+                    trust = stored
+                } else {
+                    // Defaults hold no planted target, so full trust is safe;
+                    // the nil bindings make launch reset the hotkeys too.
+                    log.error("settings seal did not verify; discarding the stored blob")
+                    didRejectTamperedSettings = true
+                    defaults.set(own, forKey: Self.key + ".rejected")
+                    save()
+                }
+            } else if let inherited {
+                adopt(inherited, as: .inherited)
                 save()
             }
         case .missing:
             sealingKey = keys.createKey()
-            if let data {
-                settings = decode(data)
-            } else {
-                hotkeyArmed = true
-            }
+            if let own { adopt(own, as: .unverified) } else if let inherited { adopt(inherited, as: .inherited) }
             save()
         case .unavailable:
-            log.error("settings seal key is unreadable; loading disarmed and not saving")
-            if let data { settings = decode(data) }
+            log.error("settings seal key is unreadable; loading untrusted and not saving")
+            if let own { adopt(own, as: .unverified) } else if let inherited { adopt(inherited, as: .inherited) }
         }
+    }
+
+    /// Load settings nobody can vouch for. They are kept, so nothing the user
+    /// had is lost, but no hotkey may start a mode until the user starts it
+    /// from fiddle's UI, and the hotkey bindings go back to their defaults.
+    private func adopt(_ data: Data, as how: Adoption) {
+        settings = decode(data)
+        trust = .none
+        if !didResetToDefaults { adoption = how }
     }
 
     private func decode(_ data: Data) -> Settings {
@@ -212,11 +238,24 @@ final class SettingsStore {
 
     func acknowledgeReset() { didResetToDefaults = false }
     func acknowledgeRejection() { didRejectTamperedSettings = false }
+    func acknowledgeAdoption() { adoption = nil }
 
-    /// The user started something from fiddle's UI, so the hotkey may replay it.
-    func armHotkeys() {
-        guard !hotkeyArmed else { return }
-        hotkeyArmed = true
+    /// Whether a hotkey may start this mode with its stored configuration.
+    func isTrustedForHotkeys(_ mode: AutomationMode) -> Bool {
+        trust.modes.contains(mode.rawValue)
+    }
+
+    /// The user started this mode from fiddle's UI, so the hotkeys may too.
+    func trustForHotkeys(_ mode: AutomationMode) {
+        guard !isTrustedForHotkeys(mode) else { return }
+        trust.modes.append(mode.rawValue)
+        save()
+    }
+
+    /// Remember the bindings fiddle just set or confirmed.
+    func recordHotkeyBindings(_ bindings: [String: String]) {
+        guard trust.bindings != bindings else { return }
+        trust.bindings = bindings
         save()
     }
 
@@ -264,10 +303,13 @@ final class SettingsStore {
     private func save() {
         guard let sealingKey else { return }
         do {
-            let data = try JSONEncoder().encode(settings)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let data = try encoder.encode(settings)
+            let state = try encoder.encode(trust)
             defaults.set(data, forKey: Self.key)
-            defaults.set(hotkeyArmed, forKey: Self.armedKey)
-            defaults.set(SettingsSeal.seal(data, armed: hotkeyArmed, key: sealingKey), forKey: Self.sealKey)
+            defaults.set(state, forKey: Self.trustKey)
+            defaults.set(SettingsSeal.seal(data, state: state, key: sealingKey), forKey: Self.sealKey)
         } catch {
             log.error("settings encode failed: \(String(describing: error), privacy: .public)")
         }

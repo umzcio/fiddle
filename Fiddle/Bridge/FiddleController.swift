@@ -157,10 +157,7 @@ final class FiddleController {
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
         case .start(let mode, let config):
-            // A start from fiddle's own UI is the user choosing the target, so
-            // the Start/Stop hotkey may replay it from now on.
-            store.armHotkeys()
-            start(mode: mode, config: config)
+            start(mode: mode, config: config, fromUI: true)
         case .stop:                           stopAll()
         case .updateConfig(let mode, let config):
             // Persist AND sync the other live surface (main window or menu-bar
@@ -173,6 +170,7 @@ final class FiddleController {
         case .setHotkey(let action, let combo): setHotkey(action: action, combo: combo)
         case .resetHotkeys:
             hotkeys.resetToDefaults()
+            store.recordHotkeyBindings(hotkeys.currentTokens())
             emitHotkeys()
         case .setPref(let key, let value):
             applyPref(key: key, value: value)
@@ -248,12 +246,15 @@ final class FiddleController {
     }
 
     /// Record that a mode's run has begun: last-used mode plus running status.
-    private func began(_ mode: AutomationMode) {
+    /// A run started from fiddle's own UI is the user choosing that mode and
+    /// its configuration on screen, so the hotkeys may start it from now on.
+    private func began(_ mode: AutomationMode, fromUI: Bool) {
+        if fromUI { store.trustForHotkeys(mode) }
         setLastMode(mode)
         setStatus(.running)
     }
 
-    private func start(mode: AutomationMode, config: Config) {
+    private func start(mode: AutomationMode, config: Config, fromUI: Bool = false) {
         // Never run engines while the recorder tap is armed: even with
         // synthesized events tagged and filtered, a recording session mixing
         // live engine output makes no sense. End and persist it first.
@@ -276,7 +277,7 @@ final class FiddleController {
                 return
             }
             clickEngine.start(config: clickerConfig)
-            began(.clicker)
+            began(.clicker, fromUI: fromUI)
         case .jiggler:
             // Nudges are posted as real mouseMoved events, which macOS silently
             // discards without Accessibility; without this guard the LED shows
@@ -284,7 +285,7 @@ final class FiddleController {
             guard requireAccessibility(for: .jiggler) else { return }
             guard case .jiggler(let jigglerConfig) = config else { return }
             jiggleEngine.start(config: jigglerConfig)
-            began(.jiggler)
+            began(.jiggler, fromUI: fromUI)
         case .wakeLock:
             guard requireAccessibility(for: .wakeLock) else { return }
             guard case .wakeLock(let wl) = config else { return }
@@ -294,12 +295,12 @@ final class FiddleController {
                 return
             }
             wakeLockEngine.start(config: wl)
-            began(.wakeLock)
+            began(.wakeLock, fromUI: fromUI)
         case .antiAFK:
             guard requireAccessibility(for: .antiAFK) else { return }
             guard case .antiAFK(let a) = config else { return }
             antiAFKEngine.start(config: a)
-            began(.antiAFK)
+            began(.antiAFK, fromUI: fromUI)
         case .recorder:
             // Playback synthesizes clicks, so it needs Accessibility too.
             guard requireAccessibility(for: .recorder) else { return }
@@ -314,7 +315,7 @@ final class FiddleController {
                 return
             }
             playbackEngine.start(events: events, config: recorderConfig)
-            began(.recorder)
+            began(.recorder, fromUI: fromUI)
         case .macro:
             guard requireAccessibility(for: .macro) else { return }
             guard case .macro(let macroConfig) = config else { return }
@@ -337,7 +338,7 @@ final class FiddleController {
             if store.settings.prefs.lastMacroId != macroConfig.macroId {
                 store.setPref("lastMacroId", .string(macroConfig.macroId))
             }
-            began(.macro)
+            began(.macro, fromUI: fromUI)
         case .keyboard:
             guard requireAccessibility(for: .keyboard) else { return }
             guard case .keyboard(let kb) = config else { return }
@@ -348,7 +349,7 @@ final class FiddleController {
             keyEngine.start(keyCode: CGKeyCode(shortcut.carbonKeyCode),
                             flags: KeyboardSynthesis.flags(from: shortcut.modifiers),
                             intervalMs: kb.intervalMs, repeat: kb.repeat, times: kb.times)
-            began(.keyboard)
+            began(.keyboard, fromUI: fromUI)
         }
     }
 
@@ -361,17 +362,24 @@ final class FiddleController {
     }
 
     /// Start the last-used mode, or stop if already running. Used by the
-    /// Start/Stop hotkey, which nobody watches, so it only replays a target
-    /// the user started from fiddle's UI (see SettingsStore.hotkeyArmed).
+    /// Start/Stop hotkey, which nobody watches, so it only starts a mode the
+    /// user has started from fiddle's UI (see HotkeyTrust).
     func toggleStartStop() {
         if status == .running {
             stopAll()
-        } else if store.hotkeyArmed {
+        } else if hotkeyMayStart(lastMode) {
             start(mode: lastMode, config: config(for: lastMode))
-        } else {
-            NSSound.beep()
-            broadcast(.error(message: "Start once from the fiddle window to enable the Start/Stop hotkey."))
         }
+    }
+
+    /// Whether a hotkey may start this mode; if not, say why. Settings adopted
+    /// without a valid seal can hold a planted macro, recording, or config,
+    /// and nothing the user saw on screen chose it.
+    private func hotkeyMayStart(_ mode: AutomationMode) -> Bool {
+        guard !store.isTrustedForHotkeys(mode) else { return true }
+        NSSound.beep()
+        broadcast(.error(message: "Start \(Self.modeLabel(mode)) once from the fiddle window before using a hotkey to start it."))
+        return false
     }
 
     private func setStatus(_ newStatus: RunStatus) {
@@ -392,7 +400,10 @@ final class FiddleController {
         hotkeys.onToggleJiggler = { [weak self] in self?.hotkeyToggleJiggler() }
         hotkeys.onPickPosition = { [weak self] in self?.beginPick() }
         hotkeys.onPanic = { [weak self] in self?.panic() }
-        hotkeys.register()
+        // The XCTest host's store is a throwaway, while the bindings live in
+        // the real defaults domain: there, only the modifier rule is applied.
+        hotkeys.register(trusted: store.isScratch ? hotkeys.currentTokens() : store.trust.bindings)
+        store.recordHotkeyBindings(hotkeys.currentTokens())
     }
 
     private func setHotkey(action: HotkeyAction, combo: String) {
@@ -402,7 +413,7 @@ final class FiddleController {
             return
         }
         guard HotkeyCombo.isAcceptableGlobalHotkey(shortcut) else {
-            broadcast(.error(message: "Add a modifier key (or use a function key); a bare key would stop working in every app."))
+            broadcast(.error(message: "Add Command, Control, or Option (or use a function key); otherwise the key would stop working in every app."))
             emitHotkeys()
             return
         }
@@ -417,6 +428,7 @@ final class FiddleController {
             return
         }
         hotkeys.setShortcut(shortcut, for: action)
+        store.recordHotkeyBindings(hotkeys.currentTokens())
         emitHotkeys()
     }
 
@@ -431,15 +443,7 @@ final class FiddleController {
 
     /// Push the current bindings so the web keycaps reflect persisted state.
     private func emitHotkeys(to sink: EngineEventSink? = nil) {
-        let actions: [HotkeyAction] = [.startStop, .toggleJiggler, .pickPosition, .panic]
-        var bindings: [String: String] = [:]
-        for action in actions {
-            if let shortcut = hotkeys.shortcut(for: action),
-               let token = HotkeyCombo.string(from: shortcut) {
-                bindings[action.rawValue] = token
-            }
-        }
-        send(.hotkeys(bindings: bindings), to: sink)
+        send(.hotkeys(bindings: hotkeys.currentTokens()), to: sink)
     }
 
     private func hotkeyStartStop() {
@@ -449,7 +453,7 @@ final class FiddleController {
     private func hotkeyToggleJiggler() {
         if status == .running && lastMode == .jiggler {
             stopAll()
-        } else {
+        } else if hotkeyMayStart(.jiggler) {
             start(mode: .jiggler, config: config(for: .jiggler))
         }
     }
@@ -552,8 +556,17 @@ final class FiddleController {
             store.acknowledgeRejection()
             send(.error(message: "Saved settings were changed outside fiddle, so they were not loaded and defaults are in use. The changed data is kept under the fiddle.settings.v1.rejected defaults key."), to: sink)
         }
+        switch store.adoption {
+        case .inherited:
+            send(.error(message: "Your settings were brought over from the previous version of fiddle. For safety, start each mode once from the fiddle window before starting it with a hotkey."), to: sink)
+        case .unverified:
+            send(.error(message: "fiddle could not verify its saved settings, so something else may have changed them. Check your macros and recording, and start each mode once from the fiddle window before starting it with a hotkey."), to: sink)
+        case nil: break
+        }
+        store.acknowledgeAdoption()
         if !hotkeys.resetActions.isEmpty {
-            send(.error(message: "A saved hotkey had no modifier key and was reset to its default."), to: sink)
+            let names = hotkeys.resetActions.map(Self.hotkeyLabel).joined(separator: ", ")
+            send(.error(message: "Hotkeys changed outside fiddle, or not safe as system-wide hotkeys, were put back: \(names)."), to: sink)
             hotkeys.acknowledgeResets()
         }
         if store.isSealUnavailable && !sealNoticeShown {

@@ -50,13 +50,21 @@ final class HotkeyComboTests: XCTestCase {
         XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a)))
         XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.one)))
         XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.space)))
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape)))
     }
 
-    func testGlobalHotkeyAllowsFunctionKeysEscapeAndModifiedKeys() {
+    // Shift alone is ordinary typing: Shift+A is just a capital A.
+    func testGlobalHotkeyRejectsShiftOnly() {
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a, modifiers: [.shift])))
+        XCTAssertFalse(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape, modifiers: [.shift])))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.f6, modifiers: [.shift])))
+    }
+
+    func testGlobalHotkeyAllowsFunctionKeysAndModifiedKeys() {
         XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.f6)))
         XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.f12)))
-        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape)))
         XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a, modifiers: [.command])))
+        XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.a, modifiers: [.option, .shift])))
         XCTAssertTrue(HotkeyCombo.isAcceptableGlobalHotkey(KeyboardShortcuts.Shortcut(.escape, modifiers: [.command])))
     }
 
@@ -81,20 +89,46 @@ final class HotkeyComboTests: XCTestCase {
 }
 
 final class StoredHotkeyTests: XCTestCase {
-    // KeyboardShortcuts registers whatever is in UserDefaults at launch, so the
-    // modifier rule setHotkey enforces has to be re-applied to stored bindings.
-    func testBareStoredBindingsAreRefused() {
-        let stored: [HotkeyAction: KeyboardShortcuts.Shortcut] = [
-            .startStop: .init(.space),
-            .toggleJiggler: .init(.f7),
-            .pickPosition: .init(.a),
-            .panic: .init(.escape, modifiers: [.command]),
-        ]
-        let refused = HotkeyManager.refusedActions { stored[$0] }
-        XCTAssertEqual(Set(refused), [.startStop, .pickPosition])
+    private let defaults: [HotkeyAction: KeyboardShortcuts.Shortcut] = [
+        .startStop: .init(.f6),
+        .toggleJiggler: .init(.f7),
+        .pickPosition: .init(.p, modifiers: [.control, .option]),
+        .panic: .init(.escape, modifiers: [.command]),
+    ]
+
+    // KeyboardShortcuts registers whatever is in UserDefaults at launch, and
+    // another process can write it. With no sealed copy, everything must be
+    // at its default.
+    func testWithoutTrustedCopyEveryChangedBindingIsReset() {
+        var stored = defaults
+        stored[.startStop] = .init(.a, modifiers: [.command])
+        stored[.panic] = nil
+        let reset = HotkeyManager.actionsToReset(current: { stored[$0] }, trusted: nil)
+        XCTAssertEqual(Set(reset), [.startStop, .panic])
+        XCTAssertEqual(HotkeyManager.expectedBinding(for: .startStop, trusted: nil), defaults[.startStop])
     }
 
-    func testUnboundActionsAreNotRefused() {
-        XCTAssertTrue(HotkeyManager.refusedActions { _ in nil }.isEmpty)
+    func testBindingsMatchingTheSealedCopyAreKept() {
+        var stored = defaults
+        stored[.startStop] = .init(.s, modifiers: [.command, .option])
+        let trusted = ["startStop": "opt+cmd+KeyS"]
+        XCTAssertEqual(HotkeyCombo.string(from: stored[.startStop]!), "opt+cmd+KeyS")
+        XCTAssertTrue(HotkeyManager.actionsToReset(current: { stored[$0] }, trusted: trusted).isEmpty)
+    }
+
+    // A planted Shift+A differs from the sealed F6, so it goes back to F6.
+    func testPlantedBindingIsPutBackToTheSealedOne() {
+        var stored = defaults
+        stored[.startStop] = .init(.a, modifiers: [.shift])
+        let trusted = ["startStop": "ctrl+KeyJ"]
+        XCTAssertEqual(HotkeyManager.actionsToReset(current: { stored[$0] }, trusted: trusted), [.startStop])
+        XCTAssertEqual(HotkeyManager.expectedBinding(for: .startStop, trusted: trusted), .init(.j, modifiers: [.control]))
+    }
+
+    // A sealed binding that the modifier rule now refuses falls back to the default.
+    func testRefusedSealedBindingFallsBackToDefault() {
+        let trusted = ["startStop": "shift+KeyA", "panic": "Space"]
+        XCTAssertEqual(HotkeyManager.expectedBinding(for: .startStop, trusted: trusted), defaults[.startStop])
+        XCTAssertEqual(HotkeyManager.expectedBinding(for: .panic, trusted: trusted), defaults[.panic])
     }
 }

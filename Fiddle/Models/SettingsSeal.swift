@@ -8,7 +8,8 @@
 //  key lives in the login Keychain, where the partition list keeps items that
 //  other programs create unreadable to fiddle and fiddle's item unreadable to
 //  them. Another program CAN delete the item silently, so a missing key never
-//  restores trust: SettingsStore adopts the blob with the hotkey disarmed.
+//  restores trust: SettingsStore adopts the blob with no mode trusted for the
+//  hotkeys (see HotkeyTrust).
 //
 
 import CryptoKit
@@ -31,21 +32,40 @@ protocol SettingsKeyStore {
 }
 
 enum SettingsSeal {
-    /// HMAC over the encoded settings plus the hotkey-armed bit, so neither
-    /// can be changed independently of the other.
-    static func seal(_ data: Data, armed: Bool, key: SymmetricKey) -> Data {
-        Data(HMAC<SHA256>.authenticationCode(for: message(data, armed: armed), using: key))
+    /// HMAC over the hotkey trust state plus the encoded settings, so neither
+    /// can be changed independently of the other. The state is length-prefixed
+    /// so no split of the same bytes verifies as a different pair.
+    static func seal(_ data: Data, state: Data, key: SymmetricKey) -> Data {
+        Data(HMAC<SHA256>.authenticationCode(for: message(data, state: state), using: key))
     }
 
-    static func verify(_ data: Data, armed: Bool, seal: Data, key: SymmetricKey) -> Bool {
-        HMAC<SHA256>.isValidAuthenticationCode(seal, authenticating: message(data, armed: armed), using: key)
+    static func verify(_ data: Data, state: Data, seal: Data, key: SymmetricKey) -> Bool {
+        HMAC<SHA256>.isValidAuthenticationCode(seal, authenticating: message(data, state: state), using: key)
     }
 
-    private static func message(_ data: Data, armed: Bool) -> Data {
-        var m = Data([armed ? 1 : 0])
+    private static func message(_ data: Data, state: Data) -> Data {
+        var length = UInt32(state.count).bigEndian
+        var m = Data(bytes: &length, count: 4)
+        m.append(state)
         m.append(data)
         return m
     }
+}
+
+/// What the hotkeys may do, sealed beside the settings blob. Kept out of
+/// `Settings` so an adopted blob can never carry its own trust.
+struct HotkeyTrust: Codable, Equatable {
+    /// Modes a hotkey may start: every mode for settings fiddle wrote itself,
+    /// none for settings adopted without a valid seal until the user starts
+    /// each one from fiddle's own UI. Raw `AutomationMode` values.
+    var modes: [String]
+    /// The bindings fiddle last set, as combo tokens keyed by `HotkeyAction`
+    /// raw value. KeyboardShortcuts keeps the live bindings in unsealed
+    /// defaults; launch puts back any that differ. Nil until first recorded.
+    var bindings: [String: String]?
+
+    static let full = HotkeyTrust(modes: AutomationMode.allCases.map(\.rawValue), bindings: nil)
+    static let none = HotkeyTrust(modes: [], bindings: nil)
 }
 
 /// A key that lives only for this process (the XCTest host).
@@ -60,7 +80,7 @@ final class EphemeralSettingsKey: SettingsKeyStore {
 }
 
 struct KeychainSettingsKey: SettingsKeyStore {
-    private let service = "edu.umontana.fiddle.settings-seal"
+    private let service = "com.zapps.fiddle.settings-seal"
     private let account = "hmac-sha256"
 
     func loadKey() -> SettingsKeyLookup {

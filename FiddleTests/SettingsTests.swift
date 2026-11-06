@@ -455,17 +455,18 @@ final class SettingsSealTests: XCTestCase {
      "macros":[{"id":"m9","name":"planted","steps":[{"kind":"click","button":"left","clickType":"single","x":10,"y":10,"ms":0}]}]}
     """#
 
-    func testFreshInstallIsArmedAndSurvivesReload() {
+    func testFreshInstallIsFullyTrustedAndSurvivesReload() {
         let keys = SuiteKeyStore(defaults)
         let store = SettingsStore(defaults: defaults, keys: keys)
-        XCTAssertTrue(store.hotkeyArmed)
+        XCTAssertTrue(AutomationMode.allCases.allSatisfy(store.isTrustedForHotkeys))
+        XCTAssertNil(store.adoption)
         var clicker = store.settings.clicker
         clicker.intervalMs = 321
         store.setClicker(clicker)
 
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertEqual(reloaded.settings.clicker.intervalMs, 321)
-        XCTAssertTrue(reloaded.hotkeyArmed)
+        XCTAssertTrue(AutomationMode.allCases.allSatisfy(reloaded.isTrustedForHotkeys))
         XCTAssertFalse(reloaded.didRejectTamperedSettings)
     }
 
@@ -477,7 +478,7 @@ final class SettingsSealTests: XCTestCase {
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertTrue(reloaded.didRejectTamperedSettings)
         XCTAssertEqual(reloaded.settings, .default)
-        XCTAssertFalse(reloaded.hotkeyArmed)
+        XCTAssertNil(reloaded.trust.bindings)       // so launch resets the hotkeys too
         XCTAssertEqual(defaults.data(forKey: "fiddle.settings.v1.rejected"), Data(planted.utf8))
     }
 
@@ -491,50 +492,59 @@ final class SettingsSealTests: XCTestCase {
         XCTAssertEqual(reloaded.settings, .default)
     }
 
-    func testFlippedArmedBitIsRejected() {
+    // The trust state is sealed with the blob: granting the macro mode from
+    // outside fiddle discards everything.
+    func testForgedTrustIsRejected() {
         let keys = SuiteKeyStore(defaults)
         defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
-        let adopted = SettingsStore(defaults: defaults, keys: keys)   // legacy adoption, disarmed
-        XCTAssertFalse(adopted.hotkeyArmed)
-        adopted.setPref("skin", .string("cobalt"))                   // re-sealed, still disarmed
-        defaults.set(true, forKey: "fiddle.settings.v1.armed")
+        let adopted = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertFalse(adopted.isTrustedForHotkeys(.macro))
+        adopted.setPref("skin", .string("cobalt"))                     // re-sealed, still untrusted
+        let forged = try! JSONEncoder().encode(HotkeyTrust.full)
+        defaults.set(forged, forKey: "fiddle.settings.v1.trust")
 
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertTrue(reloaded.didRejectTamperedSettings)
-        XCTAssertFalse(reloaded.hotkeyArmed)
+        XCTAssertEqual(reloaded.settings, .default)
     }
 
-    func testLegacyBlobIsAdoptedDisarmedUntilArmed() {
+    // The finding's scenario: adopt planted settings, start Wake Lock from the
+    // window, switch to the Macro tab. The macro mode is still not trusted.
+    func testUnverifiedBlobIsAdoptedWithNoModeTrustedUntilStartedFromTheUI() {
         let keys = SuiteKeyStore(defaults)
         defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
 
         let store = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertEqual(store.settings.macros.map(\.id), ["m9"])     // nothing the user had is lost
-        XCTAssertFalse(store.hotkeyArmed)
+        XCTAssertEqual(store.adoption, .unverified)
+        XCTAssertFalse(AutomationMode.allCases.contains(where: store.isTrustedForHotkeys))
         XCTAssertFalse(store.didRejectTamperedSettings)
-        XCTAssertFalse(SettingsStore(defaults: defaults, keys: keys).hotkeyArmed)   // stays disarmed across relaunch
 
-        store.armHotkeys()
+        store.trustForHotkeys(.wakeLock)
+        store.setPref("lastMode", .string("macro"))
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
-        XCTAssertTrue(reloaded.hotkeyArmed)
+        XCTAssertNil(reloaded.adoption)                              // sealed now
+        XCTAssertTrue(reloaded.isTrustedForHotkeys(.wakeLock))
+        XCTAssertFalse(reloaded.isTrustedForHotkeys(.macro))
         XCTAssertEqual(reloaded.settings.macros.map(\.id), ["m9"])
     }
 
     // Another process can delete the Keychain item silently, so a missing key
     // must never restore trust in whatever blob is on disk.
-    func testDeletedKeyAdoptsDisarmed() {
+    func testDeletedKeyAdoptsUntrusted() {
         let keys = SuiteKeyStore(defaults)
         let store = SettingsStore(defaults: defaults, keys: keys)
-        store.armHotkeys()
+        store.recordHotkeyBindings(["startStop": "F6"])
         keys.deleteKey()
         defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
-        defaults.removeObject(forKey: "fiddle.settings.v1.seal")
 
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
-        XCTAssertFalse(reloaded.hotkeyArmed)
+        XCTAssertEqual(reloaded.adoption, .unverified)
+        XCTAssertFalse(reloaded.isTrustedForHotkeys(.macro))
+        XCTAssertNil(reloaded.trust.bindings)
     }
 
-    func testUnavailableKeyLoadsDisarmedAndLeavesStoredBlobAlone() {
+    func testUnavailableKeyLoadsUntrustedAndLeavesStoredBlobAlone() {
         let keys = SuiteKeyStore(defaults)
         SettingsStore(defaults: defaults, keys: keys).setPref("skin", .string("cobalt"))
         let sealed = defaults.data(forKey: "fiddle.settings.v1")
@@ -542,9 +552,38 @@ final class SettingsSealTests: XCTestCase {
 
         let store = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertEqual(store.settings.prefs.skin, "cobalt")
-        XCTAssertFalse(store.hotkeyArmed)
+        XCTAssertFalse(store.isTrustedForHotkeys(.clicker))
         XCTAssertTrue(store.isSealUnavailable)
         store.setPref("skin", .string("emerald"))
         XCTAssertEqual(defaults.data(forKey: "fiddle.settings.v1"), sealed)
+    }
+
+    func testHotkeyBindingsAreSealedWithTheSettings() {
+        let keys = SuiteKeyStore(defaults)
+        SettingsStore(defaults: defaults, keys: keys).recordHotkeyBindings(["startStop": "ctrl+KeyJ"])
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertEqual(reloaded.trust.bindings, ["startStop": "ctrl+KeyJ"])
+        XCTAssertFalse(reloaded.didRejectTamperedSettings)
+    }
+
+    // Settings from the earlier bundle id come over once, untrusted, then
+    // live sealed under the new id.
+    func testInheritsLegacySettingsUntrusted() {
+        let legacySuite = "fiddle.test.legacy.\(UUID().uuidString)"
+        let legacy = UserDefaults(suiteName: legacySuite)!
+        defer { legacy.removePersistentDomain(forName: legacySuite) }
+        legacy.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+        let keys = SuiteKeyStore(defaults)
+
+        let store = SettingsStore(defaults: defaults, keys: keys, legacy: legacy)
+        XCTAssertEqual(store.adoption, .inherited)
+        XCTAssertEqual(store.settings.macros.map(\.id), ["m9"])
+        XCTAssertFalse(store.isTrustedForHotkeys(.macro))
+
+        legacy.set(Data(#"{"prefs":{"skin":"cobalt"}}"#.utf8), forKey: "fiddle.settings.v1")
+        let reloaded = SettingsStore(defaults: defaults, keys: keys, legacy: legacy)
+        XCTAssertNil(reloaded.adoption)                              // own sealed copy wins
+        XCTAssertEqual(reloaded.settings.macros.map(\.id), ["m9"])
+        XCTAssertEqual(reloaded.settings.prefs.skin, "red")
     }
 }
