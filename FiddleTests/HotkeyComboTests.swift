@@ -79,3 +79,22 @@ final class HotkeyComboTests: XCTestCase {
         }
     }
 }
+
+final class StoredHotkeyTests: XCTestCase {
+    // KeyboardShortcuts registers whatever is in UserDefaults at launch, so the
+    // modifier rule setHotkey enforces has to be re-applied to stored bindings.
+    func testBareStoredBindingsAreRefused() {
+        let stored: [HotkeyAction: KeyboardShortcuts.Shortcut] = [
+            .startStop: .init(.space),
+            .toggleJiggler: .init(.f7),
+            .pickPosition: .init(.a),
+            .panic: .init(.escape, modifiers: [.command]),
+        ]
+        let refused = HotkeyManager.refusedActions { stored[$0] }
+        XCTAssertEqual(Set(refused), [.startStop, .pickPosition])
+    }
+
+    func testUnboundActionsAreNotRefused() {
+        XCTAssertTrue(HotkeyManager.refusedActions { _ in nil }.isEmpty)
+    }
+}

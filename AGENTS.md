@@ -31,7 +31,7 @@ Fiddle/
   Engine/                   click, jiggle, wake lock, anti-AFK, playback,
                             recorder, key, hotkeys, permissions, power,
                             idle, position picker
-  Models/                   Settings, Macro, Profile, Recording
+  Models/                   Settings (and its Keychain seal), Macro, Profile, Recording
 FiddleTests/                XCTest suite
 design/fiddle-mockup.html   visual source of truth, do not edit for behavior
 ```

@@ -7,6 +7,7 @@
 //  duplicated here.
 //
 
+import CryptoKit
 import Foundation
 import os
 
@@ -124,33 +125,100 @@ struct Settings: Codable, Equatable {
     }
 }
 
-/// Loads and persists `Settings` as JSON in UserDefaults.
+/// Loads and persists `Settings` as JSON in UserDefaults, sealed with a
+/// Keychain-held key (see SettingsSeal.swift).
 final class SettingsStore {
     private static let key = "fiddle.settings.v1"
+    private static let sealKey = key + ".seal"
+    private static let armedKey = key + ".armed"
     private let defaults: UserDefaults
     private(set) var settings: Settings
     /// True when the saved blob could not be decoded and defaults were used.
     /// The controller surfaces this to the user once, then acknowledges it.
     private(set) var didResetToDefaults = false
+    /// True when the saved blob was changed outside fiddle and was discarded.
+    /// Surfaced once like `didResetToDefaults`.
+    private(set) var didRejectTamperedSettings = false
+    /// Whether the Start/Stop hotkey may start the stored target. False after
+    /// settings are adopted without a valid seal (upgrade, or a deleted key)
+    /// until the user starts something from fiddle's own UI.
+    private(set) var hotkeyArmed = false
+    /// The Keychain key could not be read; changes this session are not saved,
+    /// so a good sealed blob is never replaced by one the next launch rejects.
+    var isSealUnavailable: Bool { sealingKey == nil }
+    private var sealingKey: SymmetricKey?
     private let log = Logger(subsystem: "edu.umontana.fiddle", category: "settings")
 
-    init(defaults: UserDefaults = .standard) {
+    convenience init() {
+        // As the XCTest host the app must not touch the user's real settings or
+        // create the real Keychain key: an installed older fiddle would keep
+        // writing unsealed changes that the next sealed launch rejects.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil,
+           let scratch = UserDefaults(suiteName: "edu.umontana.fiddle.testhost") {
+            scratch.removePersistentDomain(forName: "edu.umontana.fiddle.testhost")
+            self.init(defaults: scratch, keys: EphemeralSettingsKey())
+            return
+        }
+        self.init(defaults: .standard, keys: KeychainSettingsKey())
+    }
+
+    init(defaults: UserDefaults, keys: SettingsKeyStore) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.key) {
-            do {
-                self.settings = try JSONDecoder().decode(Settings.self, from: data)
-            } catch {
-                self.settings = .default
-                self.didResetToDefaults = true
-                log.error("settings decode failed, falling back to defaults: \(String(describing: error), privacy: .public)")
-                defaults.set(data, forKey: Self.key + ".backup")
+        self.settings = .default
+        let data = defaults.data(forKey: Self.key)
+
+        switch keys.loadKey() {
+        case .found(let key):
+            sealingKey = key
+            guard let data else {
+                hotkeyArmed = true      // nothing stored; defaults hold no planted target
+                return
             }
-        } else {
-            self.settings = .default
+            let armed = defaults.bool(forKey: Self.armedKey)
+            if let seal = defaults.data(forKey: Self.sealKey),
+               SettingsSeal.verify(data, armed: armed, seal: seal, key: key) {
+                settings = decode(data)
+                hotkeyArmed = armed
+            } else {
+                log.error("settings seal did not verify; discarding the stored blob")
+                didRejectTamperedSettings = true
+                defaults.set(data, forKey: Self.key + ".rejected")
+                save()
+            }
+        case .missing:
+            sealingKey = keys.createKey()
+            if let data {
+                settings = decode(data)
+            } else {
+                hotkeyArmed = true
+            }
+            save()
+        case .unavailable:
+            log.error("settings seal key is unreadable; loading disarmed and not saving")
+            if let data { settings = decode(data) }
+        }
+    }
+
+    private func decode(_ data: Data) -> Settings {
+        do {
+            return try JSONDecoder().decode(Settings.self, from: data)
+        } catch {
+            didResetToDefaults = true
+            log.error("settings decode failed, falling back to defaults: \(String(describing: error), privacy: .public)")
+            defaults.set(data, forKey: Self.key + ".backup")
+            return .default
         }
     }
 
     func acknowledgeReset() { didResetToDefaults = false }
+    func acknowledgeRejection() { didRejectTamperedSettings = false }
+
+    /// The user started something from fiddle's UI, so the hotkey may replay it.
+    func armHotkeys() {
+        guard !hotkeyArmed else { return }
+        hotkeyArmed = true
+        save()
+    }
 
     func setClicker(_ config: ClickerConfig) {
         settings.clicker = config
@@ -194,9 +262,12 @@ final class SettingsStore {
     }
 
     private func save() {
+        guard let sealingKey else { return }
         do {
             let data = try JSONEncoder().encode(settings)
             defaults.set(data, forKey: Self.key)
+            defaults.set(hotkeyArmed, forKey: Self.armedKey)
+            defaults.set(SettingsSeal.seal(data, armed: hotkeyArmed, key: sealingKey), forKey: Self.sealKey)
         } catch {
             log.error("settings encode failed: \(String(describing: error), privacy: .public)")
         }

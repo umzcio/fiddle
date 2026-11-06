@@ -24,8 +24,26 @@ final class HotkeyManager {
     var onToggleJiggler: (() -> Void)?
     var onPickPosition: (() -> Void)?
     var onPanic: (() -> Void)?
+    /// Actions whose stored binding broke the modifier rule and was reset to
+    /// its default by `register()`, so the controller can tell the user.
+    private(set) var resetActions: [HotkeyAction] = []
+    func acknowledgeResets() { resetActions = [] }
+
+    /// Actions whose binding is not safe as a system-wide hotkey. The package
+    /// registers whatever UserDefaults holds at launch, so the rule setHotkey
+    /// enforces must be re-applied here; another process can write a bare key.
+    nonisolated static func refusedActions(_ binding: (HotkeyAction) -> KeyboardShortcuts.Shortcut?) -> [HotkeyAction] {
+        HotkeyAction.allCases.filter { action in
+            guard let shortcut = binding(action) else { return false }
+            return !HotkeyCombo.isAcceptableGlobalHotkey(shortcut)
+        }
+    }
 
     func register() {
+        resetActions = Self.refusedActions { shortcut(for: $0) }
+        for action in resetActions {
+            KeyboardShortcuts.reset(name(for: action))
+        }
         KeyboardShortcuts.onKeyDown(for: .startStop) { [weak self] in self?.onStartStop?() }
         KeyboardShortcuts.onKeyDown(for: .toggleJiggler) { [weak self] in self?.onToggleJiggler?() }
         KeyboardShortcuts.onKeyDown(for: .pickPosition) { [weak self] in self?.onPickPosition?() }

@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import Fiddle
 
@@ -35,12 +36,12 @@ final class SettingsTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         var clicker = store.settings.clicker
         clicker.intervalMs = 777
         store.setClicker(clicker)
 
-        let reloaded = SettingsStore(defaults: defaults)
+        let reloaded = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         XCTAssertEqual(reloaded.settings.clicker.intervalMs, 777)
     }
 
@@ -74,18 +75,19 @@ final class SettingsTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("soundOnClick", .bool(true))
         store.setPref("menuBarOnly", .bool(true))
 
-        let reloaded = SettingsStore(defaults: defaults)
+        let reloaded = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         XCTAssertTrue(reloaded.settings.prefs.soundOnClick)
         XCTAssertTrue(reloaded.settings.prefs.menuBarOnly)
     }
 
     @MainActor
     func testSetPrefIgnoresUnknownKeyAndWrongType() {
-        let store = SettingsStore(defaults: UserDefaults(suiteName: "fiddle.test.\(UUID().uuidString)")!)
+        let scratch = UserDefaults(suiteName: "fiddle.test.\(UUID().uuidString)")!
+        let store = SettingsStore(defaults: scratch, keys: SuiteKeyStore(scratch))
         store.setPref("bogus", .bool(true))            // unknown key: no crash, no change
         store.setPref("soundOnClick", .string("yes"))  // wrong type: ignored
         XCTAssertFalse(store.settings.prefs.soundOnClick)
@@ -113,10 +115,10 @@ final class SettingsTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
 
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("skin", .string("cobalt"))
 
-        let reloaded = SettingsStore(defaults: defaults)
+        let reloaded = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         XCTAssertEqual(reloaded.settings.prefs.skin, "cobalt")
     }
 
@@ -208,9 +210,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setRecorder(RecorderConfig(repeat: .times, times: 3))
-        let reloaded = SettingsStore(defaults: defaults)
+        let reloaded = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         XCTAssertEqual(reloaded.settings.recorder, RecorderConfig(repeat: .times, times: 3))
     }
 
@@ -219,9 +221,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setRecording([RecordedEvent(kind: .down, button: .right, x: 7, y: 8, delayMs: 5)])
-        let reloaded = SettingsStore(defaults: defaults)
+        let reloaded = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         XCTAssertEqual(reloaded.settings.recording.count, 1)
         XCTAssertEqual(reloaded.settings.recording.first?.button, .right)
     }
@@ -247,9 +249,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setMacros([Macro(id: "m1", name: "A", steps: [])])
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.macros.count, 1)
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.macros.count, 1)
     }
 
     func testDefaultDeviceIsMouse() {
@@ -280,9 +282,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("device", .string("keyboard"))
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.device, "keyboard")
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.prefs.device, "keyboard")
     }
 
     private func sampleProfile(_ id: String) -> Profile {
@@ -313,9 +315,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setProfiles([sampleProfile("1"), sampleProfile("2")])
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.profiles.count, 2)
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.profiles.count, 2)
     }
 
     func testDefaultInterfaceModeIsAdvanced() {
@@ -337,9 +339,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("interfaceMode", .string("simple"))
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.interfaceMode, "simple")
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.prefs.interfaceMode, "simple")
     }
 
     func testDefaultLastModeIsClicker() {
@@ -361,9 +363,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("lastMode", .string("jiggler"))
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.lastMode, "jiggler")
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.prefs.lastMode, "jiggler")
     }
 
     func testLastMacroIdDefaultsEmptyAndPersists() {
@@ -371,9 +373,9 @@ final class SettingsTests: XCTestCase {
         let suite = "fiddle.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = SettingsStore(defaults: defaults)
+        let store = SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
         store.setPref("lastMacroId", .string("m42"))
-        XCTAssertEqual(SettingsStore(defaults: defaults).settings.prefs.lastMacroId, "m42")
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).settings.prefs.lastMacroId, "m42")
     }
 
     func testLegacyPrefsDefaultLastMacroId() throws {
@@ -409,5 +411,140 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(s.jiggler, Settings.default.jiggler)
         XCTAssertEqual(s.profiles.map(\.id), ["p1"])
         XCTAssertEqual(s.macros.map(\.id), ["m1"])
+    }
+}
+
+/// Keeps the seal key in the test's own defaults suite, so a reloaded store
+/// finds the key its predecessor created and nothing touches the real Keychain.
+final class SuiteKeyStore: SettingsKeyStore {
+    private let defaults: UserDefaults
+    var unavailable = false
+    init(_ defaults: UserDefaults) { self.defaults = defaults }
+
+    func loadKey() -> SettingsKeyLookup {
+        if unavailable { return .unavailable }
+        guard let data = defaults.data(forKey: "test.sealKey") else { return .missing }
+        return .found(SymmetricKey(data: data))
+    }
+
+    func createKey() -> SymmetricKey? {
+        if unavailable { return nil }
+        let key = SymmetricKey(size: .bits256)
+        defaults.set(key.withUnsafeBytes { Data($0) }, forKey: "test.sealKey")
+        return key
+    }
+
+    func deleteKey() { defaults.removeObject(forKey: "test.sealKey") }
+}
+
+@MainActor
+final class SettingsSealTests: XCTestCase {
+    private var suite = ""
+    private var defaults: UserDefaults!
+
+    override func setUp() {
+        suite = "fiddle.test.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suite)!
+    }
+
+    override func tearDown() { defaults.removePersistentDomain(forName: suite) }
+
+    /// What a same-user process would plant: a macro, aimed at by lastMode.
+    private let planted = #"""
+    {"prefs":{"lastMode":"macro","lastMacroId":"m9","menuBarOnly":true},
+     "macros":[{"id":"m9","name":"planted","steps":[{"kind":"click","button":"left","clickType":"single","x":10,"y":10,"ms":0}]}]}
+    """#
+
+    func testFreshInstallIsArmedAndSurvivesReload() {
+        let keys = SuiteKeyStore(defaults)
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(store.hotkeyArmed)
+        var clicker = store.settings.clicker
+        clicker.intervalMs = 321
+        store.setClicker(clicker)
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertEqual(reloaded.settings.clicker.intervalMs, 321)
+        XCTAssertTrue(reloaded.hotkeyArmed)
+        XCTAssertFalse(reloaded.didRejectTamperedSettings)
+    }
+
+    func testRewrittenBlobIsRejected() {
+        let keys = SuiteKeyStore(defaults)
+        SettingsStore(defaults: defaults, keys: keys).setPref("skin", .string("cobalt"))
+        defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(reloaded.didRejectTamperedSettings)
+        XCTAssertEqual(reloaded.settings, .default)
+        XCTAssertFalse(reloaded.hotkeyArmed)
+        XCTAssertEqual(defaults.data(forKey: "fiddle.settings.v1.rejected"), Data(planted.utf8))
+    }
+
+    func testStrippedSealIsRejected() {
+        let keys = SuiteKeyStore(defaults)
+        SettingsStore(defaults: defaults, keys: keys).setPref("skin", .string("cobalt"))
+        defaults.removeObject(forKey: "fiddle.settings.v1.seal")
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(reloaded.didRejectTamperedSettings)
+        XCTAssertEqual(reloaded.settings, .default)
+    }
+
+    func testFlippedArmedBitIsRejected() {
+        let keys = SuiteKeyStore(defaults)
+        defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+        let adopted = SettingsStore(defaults: defaults, keys: keys)   // legacy adoption, disarmed
+        XCTAssertFalse(adopted.hotkeyArmed)
+        adopted.setPref("skin", .string("cobalt"))                   // re-sealed, still disarmed
+        defaults.set(true, forKey: "fiddle.settings.v1.armed")
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(reloaded.didRejectTamperedSettings)
+        XCTAssertFalse(reloaded.hotkeyArmed)
+    }
+
+    func testLegacyBlobIsAdoptedDisarmedUntilArmed() {
+        let keys = SuiteKeyStore(defaults)
+        defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertEqual(store.settings.macros.map(\.id), ["m9"])     // nothing the user had is lost
+        XCTAssertFalse(store.hotkeyArmed)
+        XCTAssertFalse(store.didRejectTamperedSettings)
+        XCTAssertFalse(SettingsStore(defaults: defaults, keys: keys).hotkeyArmed)   // stays disarmed across relaunch
+
+        store.armHotkeys()
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(reloaded.hotkeyArmed)
+        XCTAssertEqual(reloaded.settings.macros.map(\.id), ["m9"])
+    }
+
+    // Another process can delete the Keychain item silently, so a missing key
+    // must never restore trust in whatever blob is on disk.
+    func testDeletedKeyAdoptsDisarmed() {
+        let keys = SuiteKeyStore(defaults)
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        store.armHotkeys()
+        keys.deleteKey()
+        defaults.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+        defaults.removeObject(forKey: "fiddle.settings.v1.seal")
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertFalse(reloaded.hotkeyArmed)
+    }
+
+    func testUnavailableKeyLoadsDisarmedAndLeavesStoredBlobAlone() {
+        let keys = SuiteKeyStore(defaults)
+        SettingsStore(defaults: defaults, keys: keys).setPref("skin", .string("cobalt"))
+        let sealed = defaults.data(forKey: "fiddle.settings.v1")
+        keys.unavailable = true
+
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertEqual(store.settings.prefs.skin, "cobalt")
+        XCTAssertFalse(store.hotkeyArmed)
+        XCTAssertTrue(store.isSealUnavailable)
+        store.setPref("skin", .string("emerald"))
+        XCTAssertEqual(defaults.data(forKey: "fiddle.settings.v1"), sealed)
     }
 }

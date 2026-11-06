@@ -111,6 +111,9 @@ final class FiddleController {
         didSet { menuState?.status = status; menuState?.skin = store.settings.prefs.skin }
     }
 
+    /// The unreadable-Keychain notice is shown on the first surface to boot only.
+    private var sealNoticeShown = false
+
     init(store: SettingsStore = SettingsStore()) {
         self.store = store
         self.lastMode = AutomationMode(rawValue: store.settings.prefs.lastMode) ?? .clicker
@@ -153,7 +156,11 @@ final class FiddleController {
         case .ready:                          pushInitialState(to: sink)
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
-        case .start(let mode, let config):    start(mode: mode, config: config)
+        case .start(let mode, let config):
+            // A start from fiddle's own UI is the user choosing the target, so
+            // the Start/Stop hotkey may replay it from now on.
+            store.armHotkeys()
+            start(mode: mode, config: config)
         case .stop:                           stopAll()
         case .updateConfig(let mode, let config):
             // Persist AND sync the other live surface (main window or menu-bar
@@ -353,12 +360,17 @@ final class FiddleController {
         setStatus(.idle)
     }
 
-    /// Start the last-used mode, or stop if already running. Used by the menu bar.
+    /// Start the last-used mode, or stop if already running. Used by the
+    /// Start/Stop hotkey, which nobody watches, so it only replays a target
+    /// the user started from fiddle's UI (see SettingsStore.hotkeyArmed).
     func toggleStartStop() {
         if status == .running {
             stopAll()
-        } else {
+        } else if store.hotkeyArmed {
             start(mode: lastMode, config: config(for: lastMode))
+        } else {
+            NSSound.beep()
+            broadcast(.error(message: "Start once from the fiddle window to enable the Start/Stop hotkey."))
         }
     }
 
@@ -535,6 +547,18 @@ final class FiddleController {
         if store.didResetToDefaults {
             store.acknowledgeReset()
             send(.error(message: "Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key."), to: sink)
+        }
+        if store.didRejectTamperedSettings {
+            store.acknowledgeRejection()
+            send(.error(message: "Saved settings were changed outside fiddle, so they were not loaded and defaults are in use. The changed data is kept under the fiddle.settings.v1.rejected defaults key."), to: sink)
+        }
+        if !hotkeys.resetActions.isEmpty {
+            send(.error(message: "A saved hotkey had no modifier key and was reset to its default."), to: sink)
+            hotkeys.acknowledgeResets()
+        }
+        if store.isSealUnavailable && !sealNoticeShown {
+            sealNoticeShown = true
+            send(.error(message: "fiddle could not read its settings key from the Keychain, so changes this session will not be saved."), to: sink)
         }
     }
 

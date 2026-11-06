@@ -55,7 +55,7 @@ enum JiggleStyle: String, Codable {
     case visible // leave the cursor where it lands
 }
 
-enum HotkeyAction: String, Codable {
+enum HotkeyAction: String, Codable, CaseIterable {
     case startStop
     case pickPosition
     case toggleJiggler

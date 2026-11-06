@@ -31,6 +31,7 @@
 		0A0000000000000000000036 /* PositionPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000026 /* PositionPicker.swift */; };
 		0A0000000000000000000037 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000000000000000000027 /* Settings.swift */; };
 		0A00000000000000000000AC /* Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000AD /* Profile.swift */; };
+		0A00000000000000000000F1 /* SettingsSeal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000F0 /* SettingsSeal.swift */; };
 		0A00000000000000000000A4 /* Macro.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00000000000000000000A5 /* Macro.swift */; };
 		0A000000000000000000009A /* Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000009B /* Recording.swift */; };
 		0A000000000000000000009E /* PlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A000000000000000000009F /* PlaybackEngine.swift */; };
@@ -86,6 +87,7 @@
 		0A0000000000000000000026 /* PositionPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionPicker.swift; sourceTree = "<group>"; };
 		0A0000000000000000000027 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		0A00000000000000000000AD /* Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Profile.swift; sourceTree = "<group>"; };
+		0A00000000000000000000F0 /* SettingsSeal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSeal.swift; sourceTree = "<group>"; };
 		0A00000000000000000000A5 /* Macro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Macro.swift; sourceTree = "<group>"; };
 		0A000000000000000000009B /* Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recording.swift; sourceTree = "<group>"; };
 		0A000000000000000000009F /* PlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackEngine.swift; sourceTree = "<group>"; };
@@ -204,6 +206,7 @@
 				0A000000000000000000009B /* Recording.swift */,
 				0A00000000000000000000A5 /* Macro.swift */,
 				0A00000000000000000000AD /* Profile.swift */,
+				0A00000000000000000000F0 /* SettingsSeal.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -355,6 +358,7 @@
 				0A000000000000000000009A /* Recording.swift in Sources */,
 				0A00000000000000000000A4 /* Macro.swift in Sources */,
 				0A00000000000000000000AC /* Profile.swift in Sources */,
+				0A00000000000000000000F1 /* SettingsSeal.swift in Sources */,
 				0A0000000000000000000038 /* FiddleController.swift in Sources */,
 				0A0000000000000000000081 /* LoginItem.swift in Sources */,
 				0A0000000000000000000083 /* ClickSound.swift in Sources */,
