@@ -27,7 +27,7 @@ final class PowerAssertion {
     /// tests can assert acquire/release balance (a leaked assertion keeps the
     /// user's display awake forever).
     private(set) var active = false
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "power")
+    private let log = Logger(subsystem: "com.zapps.fiddle", category: "power")
 
     init(kind: Kind = .displaySleep) { self.kind = kind }
 

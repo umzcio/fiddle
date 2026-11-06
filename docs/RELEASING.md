@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- The Release signing config is set in the Xcode project (Developer ID, Team 5JJ6G6A84S, hardened runtime).
-- `scripts/.notary-config.local` exists and is filled in (copy `scripts/.notary-config.example`, gitignored, never commit the `.p8` key).
+- The Release signing config is set in the Xcode project (Developer ID, Team V2P99VF75Q, hardened runtime). The scripts refuse any other team's signature.
+- The `notary` notarytool keychain profile exists (`xcrun notarytool store-credentials notary`; override the name with `NOTARY_PROFILE`). Never put notary keys or passwords in the repo.
 - `gh` is authenticated for the `umzcio/fiddle` repo.
 
 ## Steps

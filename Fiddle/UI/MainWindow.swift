@@ -40,7 +40,7 @@ final class DragRegionView: NSView {
 
 @MainActor
 final class MainWindowController: NSObject, BridgeHost {
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "window")
+    private let log = Logger(subsystem: "com.zapps.fiddle", category: "window")
 
     let window: FiddleWindow
     private(set) var bridge: FiddleBridge!

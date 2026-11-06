@@ -1,28 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-# Notarizes a .dmg / .zip / .app with Apple using an App Store Connect API key,
-# then staples the ticket. Credentials come from scripts/.notary-config.local
-# (gitignored; see .notary-config.example).
+# Notarizes a .dmg / .zip / .app with Apple, then staples the ticket.
+# Credentials come from a notarytool keychain profile, "notary" by default
+# (override with NOTARY_PROFILE); create it once with
+#   xcrun notarytool store-credentials notary
+# Never put notary keys or passwords in this repo.
 #
-# Usage: scripts/notarize.sh build/Build/Products/Release/Fiddle.app
-#
-# Prereqs: build a Release (hardened-runtime, Developer ID-signed) artifact first,
-# e.g. zip it:  ditto -c -k --keepParent Fiddle.app fiddle.zip
+# Usage: scripts/notarize.sh build/Fiddle-1.1.0.dmg
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ARTIFACT="${1:?usage: notarize.sh <path-to-dmg-zip-or-app>}"
-CONFIG="$ROOT/scripts/.notary-config.local"
-
-[ -f "$CONFIG" ] || { echo "error: $CONFIG not found (copy scripts/.notary-config.example)"; exit 1; }
-# shellcheck disable=SC1090
-source "$CONFIG"
-KEY_PATH="${NOTARY_KEY/#\~/$HOME}"
+PROFILE="${NOTARY_PROFILE:-notary}"
 
 echo "==> Submitting $(basename "$ARTIFACT") to Apple notary"
-xcrun notarytool submit "$ARTIFACT" \
-    --key "$KEY_PATH" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER" \
-    --wait
+xcrun notarytool submit "$ARTIFACT" --keychain-profile "$PROFILE" --wait
 
 echo "==> Stapling"
 xcrun stapler staple "$ARTIFACT"

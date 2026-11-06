@@ -46,7 +46,7 @@ struct MenuLabel: View {
 /// the AppDelegate.
 @MainActor
 final class PopoverController: NSObject, BridgeHost {
-    private let log = Logger(subsystem: "edu.umontana.fiddle", category: "menubar")
+    private let log = Logger(subsystem: "com.zapps.fiddle", category: "menubar")
 
     private(set) var bridge: FiddleBridge!
     private weak var app: AppDelegate?

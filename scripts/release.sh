@@ -5,9 +5,9 @@ set -euo pipefail
 # Produces build/Fiddle-<version>.dmg ready to upload to a GitHub release.
 #
 # Prereqs:
-#   - The Release signing config is set (Developer ID, Team 5JJ6G6A84S, hardened
+#   - The Release signing config is set (Developer ID, Team V2P99VF75Q, hardened
 #     runtime), which it is in the Xcode project.
-#   - scripts/.notary-config.local set up (see .notary-config.example).
+#   - The `notary` notarytool keychain profile exists (see docs/RELEASING.md).
 #
 # Usage: scripts/release.sh 1.0.0
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

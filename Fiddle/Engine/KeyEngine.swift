@@ -76,7 +76,7 @@ final class KeyEngine {
     static let minIntervalMs = 10
 
     private let poster: KeyEventPosting
-    private let queue = DispatchQueue(label: "edu.umontana.fiddle.keyengine", qos: .userInteractive)
+    private let queue = DispatchQueue(label: "com.zapps.fiddle.keyengine", qos: .userInteractive)
     private var timer: DispatchSourceTimer?
     private var runState: KeyRunState?
     private var running = false

@@ -42,6 +42,12 @@ case "$SIGINFO" in
     *"Authority=Developer ID Application"*) ;;
     *) echo "error: $APP_NAME.app is not Developer ID signed"; exit 1 ;;
 esac
+# Only this team signs releases; anything else in the keychain is refused.
+TEAM_ID="V2P99VF75Q"
+case "$SIGINFO" in
+    *"TeamIdentifier=$TEAM_ID"*) ;;
+    *) echo "error: $APP_NAME.app is not signed by team $TEAM_ID"; exit 1 ;;
+esac
 ENTS="$(codesign -d --entitlements - "$APP_DIR" 2>/dev/null || true)"
 case "$ENTS" in
     *get-task-allow*) echo "error: get-task-allow present, this is a development signature, not distributable"; exit 1 ;;
