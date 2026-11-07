@@ -3,12 +3,12 @@
     <channel>
         <title>Fiddle</title>
         <item>
-            <title>1.0.10</title>
-            <pubDate>Thu, 05 Nov 2026 20:47:32 -0700</pubDate>
-            <sparkle:version>11</sparkle:version>
-            <sparkle:shortVersionString>1.0.10</sparkle:shortVersionString>
+            <title>1.1.0</title>
+            <pubDate>Fri, 06 Nov 2026 16:40:29 -0700</pubDate>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/umzcio/fiddle/releases/download/v1.0.10/Fiddle-1.0.10.dmg" length="5494081" type="application/octet-stream" sparkle:edSignature="2CTy+BT962NRz5R62Mc/hWP4cjiqNx09DyNFzWDaFxYS7uxHBuCqqb3ONoQntLldXrq6sngZ971XEqNNhUmBAQ=="/>
+            <enclosure url="https://github.com/umzcio/fiddle/releases/download/v1.1.0/Fiddle-1.1.0.dmg" length="5506598" type="application/octet-stream" sparkle:edSignature="xdcta4Y1SwVASPRz/c6pjTIDMAPx5WQl0Ic1tDd8/eur/JF/6R5N2HxyrB1H79ZeKtmpghjauxEI3YjnkKrwBQ=="/>
         </item>
     </channel>
 </rss>
