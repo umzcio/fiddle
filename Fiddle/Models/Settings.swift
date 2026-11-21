@@ -4,7 +4,7 @@
 //
 //  The single Codable value that persists user configuration. Hotkey bindings
 //  are persisted by the KeyboardShortcuts package; the store only keeps a
-//  sealed copy of them in HotkeyTrust to detect changes made outside fiddle.
+//  sealed copy of them in TrustState to detect changes made outside fiddle.
 //
 
 import CryptoKit
@@ -141,12 +141,13 @@ final class SettingsStore {
     private static let key = "fiddle.settings.v1"
     private static let sealKey = key + ".seal"
     private static let trustKey = key + ".trust"
-    /// fiddle's bundle id before 1.1.0. Its settings are imported once.
+    /// fiddle's bundle id before 1.1.0. Its settings are imported only on
+    /// fiddle's first launch under the new id (no seal key yet).
     static let legacySuite = "edu.umontana.fiddle"
 
     private let defaults: UserDefaults
     private(set) var settings: Settings
-    private(set) var trust: HotkeyTrust = .full
+    private(set) var trust: TrustState = .full
     /// True when the saved blob could not be decoded and defaults were used.
     /// The controller surfaces this to the user once, then acknowledges it.
     private(set) var didResetToDefaults = false
@@ -155,25 +156,33 @@ final class SettingsStore {
     private(set) var didRejectTamperedSettings = false
     /// Set when settings were loaded without a valid seal. Surfaced once.
     private(set) var adoption: Adoption?
+    /// True when the seal key exists but the settings it sealed are gone.
+    /// fiddle always saves right after creating its key, so something else
+    /// removed them; defaults are used, never an older copy.
+    private(set) var didFindSettingsMissing = false
     /// The Keychain key could not be read; changes this session are not saved,
     /// so a good sealed blob is never replaced by one the next launch rejects.
     var isSealUnavailable: Bool { sealingKey == nil }
-    /// The XCTest host's throwaway store. Hotkey bindings live in the real
-    /// defaults domain, so the controller must not enforce them against it.
+    /// The XCTest host's throwaway store (Debug builds only). Hotkey bindings
+    /// live in the real defaults domain, so the controller must not enforce
+    /// them against it.
     let isScratch: Bool
     private var sealingKey: SymmetricKey?
     private let log = Logger(subsystem: "com.zapps.fiddle", category: "settings")
 
     convenience init() {
+        #if DEBUG
         // As the XCTest host the app must not touch the user's real settings or
         // create the real Keychain key: an installed fiddle would then reject
-        // its own settings at the next launch.
+        // its own settings at the next launch. Compiled out of Release, where
+        // anyone who launches fiddle can set this variable.
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil,
            let scratch = UserDefaults(suiteName: "com.zapps.fiddle.testhost") {
             scratch.removePersistentDomain(forName: "com.zapps.fiddle.testhost")
             self.init(defaults: scratch, keys: EphemeralSettingsKey(), isScratch: true)
             return
         }
+        #endif
         self.init(defaults: .standard, keys: KeychainSettingsKey(), legacy: UserDefaults(suiteName: Self.legacySuite))
     }
 
@@ -182,7 +191,6 @@ final class SettingsStore {
         self.isScratch = isScratch
         self.settings = .default
         let own = defaults.data(forKey: Self.key)
-        let inherited = own == nil ? legacy?.data(forKey: Self.key) : nil
 
         switch keys.loadKey() {
         case .found(let key):
@@ -191,7 +199,7 @@ final class SettingsStore {
                 let state = defaults.data(forKey: Self.trustKey) ?? Data()
                 if let seal = defaults.data(forKey: Self.sealKey),
                    SettingsSeal.verify(own, state: state, seal: seal, key: key),
-                   let stored = try? JSONDecoder().decode(HotkeyTrust.self, from: state) {
+                   let stored = try? JSONDecoder().decode(TrustState.self, from: state) {
                     settings = decode(own)
                     trust = stored
                 } else {
@@ -202,26 +210,38 @@ final class SettingsStore {
                     defaults.set(own, forKey: Self.key + ".rejected")
                     save()
                 }
-            } else if let inherited {
-                adopt(inherited, as: .inherited)
+            } else {
+                // Not a first launch, so the old bundle id's copy is not
+                // consulted: another process could have planted it there.
+                log.error("seal key found but the settings are missing; using defaults")
+                didFindSettingsMissing = true
                 save()
             }
         case .missing:
             sealingKey = keys.createKey()
-            if let own { adopt(own, as: .unverified) } else if let inherited { adopt(inherited, as: .inherited) }
+            if let own {
+                adopt(own, as: .unverified)
+            } else if let inherited = legacy?.data(forKey: Self.key) {
+                adopt(inherited, as: .inherited)
+            }
             save()
         case .unavailable:
             log.error("settings seal key is unreadable; loading untrusted and not saving")
-            if let own { adopt(own, as: .unverified) } else if let inherited { adopt(inherited, as: .inherited) }
+            if let own { adopt(own, as: .unverified) }
         }
     }
 
     /// Load settings nobody can vouch for. They are kept, so nothing the user
-    /// had is lost, but no hotkey may start a mode until the user starts it
-    /// from fiddle's UI, and the hotkey bindings go back to their defaults.
+    /// had is lost, but every saved macro, profile and recording needs the
+    /// user's confirmation before it runs, no hotkey may start a mode until the
+    /// user starts it from fiddle's UI, and the hotkey bindings go back to
+    /// their defaults.
     private func adopt(_ data: Data, as how: Adoption) {
         settings = decode(data)
         trust = .none
+        trust.unverifiedMacros = settings.macros.map(\.id)
+        trust.unverifiedProfiles = settings.profiles.map(\.id)
+        trust.unverifiedRecording = !settings.recording.isEmpty
         if !didResetToDefaults { adoption = how }
     }
 
@@ -239,6 +259,16 @@ final class SettingsStore {
     func acknowledgeReset() { didResetToDefaults = false }
     func acknowledgeRejection() { didRejectTamperedSettings = false }
     func acknowledgeAdoption() { adoption = nil }
+    func acknowledgeMissingSettings() { didFindSettingsMissing = false }
+
+    func isUnverifiedMacro(_ id: String) -> Bool { trust.unverifiedMacros.contains(id) }
+    func isUnverifiedProfile(_ id: String) -> Bool { trust.unverifiedProfiles.contains(id) }
+    var isRecordingUnverified: Bool { trust.unverifiedRecording }
+
+    /// The user confirmed an unverified item after being told what it is.
+    func confirmMacro(_ id: String) { trust.unverifiedMacros.removeAll { $0 == id }; save() }
+    func confirmProfile(_ id: String) { trust.unverifiedProfiles.removeAll { $0 == id }; save() }
+    func confirmRecording() { trust.unverifiedRecording = false; save() }
 
     /// Whether a hotkey may start this mode with its stored configuration.
     func isTrustedForHotkeys(_ mode: AutomationMode) -> Bool {
@@ -252,9 +282,19 @@ final class SettingsStore {
         save()
     }
 
-    /// Remember the bindings fiddle just set or confirmed.
+    /// Remember the full set of bindings fiddle just set or confirmed. Callers
+    /// pass the values fiddle chose, never a read-back of the unsealed defaults.
     func recordHotkeyBindings(_ bindings: [String: String]) {
         guard trust.bindings != bindings else { return }
+        trust.bindings = bindings
+        save()
+    }
+
+    /// Remember one binding fiddle just set, leaving the others as sealed.
+    func recordHotkeyBinding(_ action: String, token: String) {
+        var bindings = trust.bindings ?? [:]
+        guard bindings[action] != token else { return }
+        bindings[action] = token
         trust.bindings = bindings
         save()
     }
@@ -271,9 +311,20 @@ final class SettingsStore {
 
     func setWakeLock(_ config: WakeLockConfig) { settings.wakeLock = config; save() }
     func setAntiAFK(_ config: AntiAFKConfig) { settings.antiAFK = config; save() }
-    func setRecording(_ events: [RecordedEvent]) { settings.recording = events; save() }
+    /// A recording made (or cleared) in fiddle replaces any unverified one.
+    func setRecording(_ events: [RecordedEvent]) {
+        settings.recording = events
+        trust.unverifiedRecording = false
+        save()
+    }
     func setRecorder(_ config: RecorderConfig) { settings.recorder = config; save() }
-    func setMacros(_ macros: [Macro]) { settings.macros = macros; save() }
+    /// Unverified ids stay flagged while the macro exists, even if edited.
+    func setMacros(_ macros: [Macro]) {
+        settings.macros = macros
+        let ids = Set(macros.map(\.id))
+        trust.unverifiedMacros.removeAll { !ids.contains($0) }
+        save()
+    }
 
     func setPref(_ key: String, _ value: PrefValue) {
         switch (key, value) {
@@ -290,7 +341,12 @@ final class SettingsStore {
     }
 
     func setKeyboard(_ config: KeyboardConfig) { settings.keyboard = config; save() }
-    func setProfiles(_ profiles: [Profile]) { settings.profiles = profiles; save() }
+    func setProfiles(_ profiles: [Profile]) {
+        settings.profiles = profiles
+        let ids = Set(profiles.map(\.id))
+        trust.unverifiedProfiles.removeAll { !ids.contains($0) }
+        save()
+    }
 
     /// Batch several mutations into a single encode + write, for callers that
     /// change many fields at once (applying a profile re-encodes the whole

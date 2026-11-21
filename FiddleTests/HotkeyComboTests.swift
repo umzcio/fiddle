@@ -131,4 +131,11 @@ final class StoredHotkeyTests: XCTestCase {
         XCTAssertEqual(HotkeyManager.expectedBinding(for: .startStop, trusted: trusted), defaults[.startStop])
         XCTAssertEqual(HotkeyManager.expectedBinding(for: .panic, trusted: trusted), defaults[.panic])
     }
+
+    // What launch seals is computed from the expected bindings, not read back.
+    func testExpectedTokensFallBackToDefaults() {
+        XCTAssertEqual(HotkeyManager.expectedTokens(trusted: nil),
+                       ["startStop": "F6", "toggleJiggler": "F7", "pickPosition": "ctrl+opt+KeyP", "panic": "cmd+Escape"])
+        XCTAssertEqual(HotkeyManager.expectedTokens(trusted: ["startStop": "ctrl+KeyJ"])["startStop"], "ctrl+KeyJ")
+    }
 }

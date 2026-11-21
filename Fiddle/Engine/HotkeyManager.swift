@@ -49,11 +49,32 @@ final class HotkeyManager {
         HotkeyAction.allCases.filter { current($0) != expectedBinding(for: $0, trusted: trusted) }
     }
 
-    func register(trusted: [String: String]?) {
-        resetActions = Self.actionsToReset(current: { shortcut(for: $0) }, trusted: trusted)
-        for action in resetActions {
+    /// The expected bindings as tokens: what fiddle seals after launch puts
+    /// every binding back to it. Computed, never read back from defaults.
+    nonisolated static func expectedTokens(trusted: [String: String]?) -> [String: String] {
+        var out: [String: String] = [:]
+        for action in HotkeyAction.allCases {
+            if let shortcut = expectedBinding(for: action, trusted: trusted),
+               let token = HotkeyCombo.string(from: shortcut) {
+                out[action.rawValue] = token
+            }
+        }
+        return out
+    }
+
+    /// Put every stored binding that differs from the expected one back, and
+    /// return the actions that were changed.
+    @discardableResult
+    func reconcile(trusted: [String: String]?) -> [HotkeyAction] {
+        let changed = Self.actionsToReset(current: { shortcut(for: $0) }, trusted: trusted)
+        for action in changed {
             KeyboardShortcuts.setShortcut(Self.expectedBinding(for: action, trusted: trusted), for: Self.name(for: action))
         }
+        return changed
+    }
+
+    func register(trusted: [String: String]?) {
+        resetActions = reconcile(trusted: trusted)
         KeyboardShortcuts.onKeyDown(for: .startStop) { [weak self] in self?.onStartStop?() }
         KeyboardShortcuts.onKeyDown(for: .toggleJiggler) { [weak self] in self?.onToggleJiggler?() }
         KeyboardShortcuts.onKeyDown(for: .pickPosition) { [weak self] in self?.onPickPosition?() }
@@ -70,8 +91,21 @@ final class HotkeyManager {
         }
     }
 
+    /// Call `onChange` on the main actor whenever a stored binding changes,
+    /// including writes by other processes (KVO on the defaults reports
+    /// those). The package reads the stored value on every key press, so an
+    /// outside write would otherwise retarget or silence a hotkey mid-session.
+    func observeStoredBindings(_ onChange: @escaping @MainActor () -> Void) {
+        let observer = StoredBindingObserver(onChange: onChange)
+        for action in HotkeyAction.allCases {
+            UserDefaults.standard.addObserver(observer, forKeyPath: "KeyboardShortcuts_\(Self.name(for: action).rawValue)", options: [.new], context: nil)
+        }
+        bindingObserver = observer
+    }
+    private var bindingObserver: StoredBindingObserver?
+
     /// Every bound action as a combo token keyed by action raw value: the
-    /// shape the web keycaps and the sealed copy both use.
+    /// shape the web keycaps use.
     func currentTokens() -> [String: String] {
         var out: [String: String] = [:]
         for action in HotkeyAction.allCases {
@@ -96,5 +130,15 @@ final class HotkeyManager {
     /// Restore every binding to the defaults declared above.
     func resetToDefaults() {
         KeyboardShortcuts.reset(.startStop, .toggleJiggler, .pickPosition, .panic)
+    }
+}
+
+private final class StoredBindingObserver: NSObject {
+    private let onChange: @MainActor () -> Void
+    init(onChange: @escaping @MainActor () -> Void) { self.onChange = onChange }
+
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+        let onChange = self.onChange
+        DispatchQueue.main.async { MainActor.assumeIsolated { onChange() } }
     }
 }

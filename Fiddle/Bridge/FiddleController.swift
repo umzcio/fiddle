@@ -111,8 +111,12 @@ final class FiddleController {
         didSet { menuState?.status = status; menuState?.skin = store.settings.prefs.skin }
     }
 
-    /// The unreadable-Keychain notice is shown on the first surface to boot only.
-    private var sealNoticeShown = false
+    /// Launch-time warnings about settings fiddle could not vouch for. Shown
+    /// in a native alert by `presentStartupNotices()` (visible even when the
+    /// window is hidden) and logged on every surface that boots.
+    private(set) var startupNotices: [String] = []
+    /// The alert stays pending until the user clicks its OK button.
+    private var startupNoticesPending = false
 
     init(store: SettingsStore = SettingsStore()) {
         self.store = store
@@ -131,7 +135,98 @@ final class FiddleController {
             self.broadcast(.error(message: "Recording stopped: the \(ClickRecorder.maxEvents)-step limit was reached."))
         }
         configureHotkeys()
+        collectStartupNotices()
         applyStartupPrefs()
+    }
+
+    // MARK: - Notices
+
+    private func collectStartupNotices() {
+        var notices: [String] = []
+        if store.didResetToDefaults {
+            notices.append("Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key.")
+        }
+        if store.didRejectTamperedSettings {
+            notices.append("Saved settings were changed outside fiddle, so they were not loaded and defaults are in use. The changed data is kept under the fiddle.settings.v1.rejected defaults key.")
+        }
+        if store.didFindSettingsMissing {
+            notices.append("fiddle's saved settings were missing, so defaults are in use.")
+        }
+        switch store.adoption {
+        case .inherited:
+            notices.append("Your settings were brought over from the previous version of fiddle. fiddle will ask before playing a macro, recording, or profile it brought over, and each mode must be started once from the fiddle window before a hotkey can start it.")
+        case .unverified:
+            notices.append("fiddle could not verify its saved settings, so another program may have changed them. fiddle will ask before playing any saved macro, recording, or profile, and each mode must be started once from the fiddle window before a hotkey can start it.")
+        case nil: break
+        }
+        if !hotkeys.resetActions.isEmpty {
+            notices.append(Self.hotkeysPutBackMessage(hotkeys.resetActions))
+        }
+        if store.isSealUnavailable {
+            notices.append("fiddle could not read its settings key from the login keychain, so changes this session will not be saved.")
+        }
+        store.acknowledgeReset()
+        store.acknowledgeRejection()
+        store.acknowledgeMissingSettings()
+        store.acknowledgeAdoption()
+        hotkeys.acknowledgeResets()
+        startupNotices = notices
+        startupNoticesPending = !notices.isEmpty
+    }
+
+    private static func hotkeysPutBackMessage(_ actions: [HotkeyAction]) -> String {
+        "Hotkeys changed outside fiddle, or not safe as system-wide hotkeys, were put back: \(actions.map(hotkeyLabel).joined(separator: ", "))."
+    }
+
+    /// Show the launch warnings in one native alert, until the user clicks
+    /// OK. Called once launch is done (so it appears whether or not the main
+    /// window is shown), again whenever fiddle becomes active or a surface
+    /// loads, and before any start from the UI, while still unacknowledged.
+    func presentStartupNotices() {
+        #if DEBUG
+        if store.isScratch { return }   // never block the XCTest host on a modal
+        #endif
+        guard startupNoticesPending, !presentingNotices else { return }
+        presentingNotices = true
+        defer { presentingNotices = false }
+        if alert(title: "fiddle needs your attention", text: startupNotices.joined(separator: "\n\n")) {
+            startupNoticesPending = false
+        }
+    }
+    private var presentingNotices = false
+
+    /// A native alert. With `confirm`, it has that button plus Cancel and
+    /// returns whether the user chose `confirm`.
+    @discardableResult
+    private func alert(title: String, text: String, confirm: String? = nil) -> Bool {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = text
+        // An explicit first button, so only a real click on it counts: an
+        // alert closed any other way reads as Cancel.
+        alert.addButton(withTitle: confirm ?? "OK")
+        if confirm != nil { alert.addButton(withTitle: "Cancel") }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// The saved item a start would run, if the user has not confirmed it since
+    /// it arrived in settings fiddle could not verify.
+    private func unverifiedItem(mode: AutomationMode, config: Config) -> (title: String, text: String, confirm: () -> Void)? {
+        switch (mode, config) {
+        case (.macro, .macro(let mc)) where store.isUnverifiedMacro(mc.macroId):
+            let name = store.settings.macros.first { $0.id == mc.macroId }?.name ?? "This macro"
+            return ("Play unverified macro?",
+                    "\u{201C}\(name)\u{201D} came from settings fiddle could not verify, so another program may have planted or changed it. Check its steps in the Macro Player before playing it.",
+                    { [store] in store.confirmMacro(mc.macroId) })
+        case (.recorder, _) where store.isRecordingUnverified:
+            return ("Play unverified recording?",
+                    "This recording came from settings fiddle could not verify, so another program may have planted or changed it. Check its steps in the Click Recorder before playing it.",
+                    { [store] in store.confirmRecording() })
+        default:
+            return nil
+        }
     }
 
     /// Apply persisted prefs at launch (login-item state is owned by macOS, so
@@ -153,11 +248,29 @@ final class FiddleController {
 
     func handle(_ command: Command, from sink: EngineEventSink? = nil) {
         switch command {
-        case .ready:                          pushInitialState(to: sink)
+        case .ready:
+            pushInitialState(to: sink)
+            DispatchQueue.main.async { [weak self] in self?.presentStartupNotices() }
         case .checkPermissions:               emitPermissions()
         case .openSettings(let pane):         openSettings(pane)
         case .start(let mode, let config):
-            start(mode: mode, config: config, fromUI: true)
+            // Unread warnings about the settings come before anything they cover.
+            if startupNoticesPending {
+                presentStartupNotices()
+                if startupNoticesPending { broadcast(.status(status)); break }
+            }
+            // An unverified macro or recording needs the user's say-so, and a
+            // start that needed it does not also trust the mode for hotkeys.
+            if let item = unverifiedItem(mode: mode, config: config) {
+                guard alert(title: item.title, text: item.text, confirm: "Play") else {
+                    broadcast(.status(status))   // undo any optimistic Running in the UI
+                    break
+                }
+                item.confirm()
+                start(mode: mode, config: config, fromUI: false)
+            } else {
+                start(mode: mode, config: config, fromUI: true)
+            }
         case .stop:                           stopAll()
         case .updateConfig(let mode, let config):
             // Persist AND sync the other live surface (main window or menu-bar
@@ -169,8 +282,8 @@ final class FiddleController {
         case .pickPosition(let purpose):      beginPick(purpose: purpose)
         case .setHotkey(let action, let combo): setHotkey(action: action, combo: combo)
         case .resetHotkeys:
+            store.recordHotkeyBindings(HotkeyManager.expectedTokens(trusted: nil))
             hotkeys.resetToDefaults()
-            store.recordHotkeyBindings(hotkeys.currentTokens())
             emitHotkeys()
         case .setPref(let key, let value):
             applyPref(key: key, value: value)
@@ -363,7 +476,7 @@ final class FiddleController {
 
     /// Start the last-used mode, or stop if already running. Used by the
     /// Start/Stop hotkey, which nobody watches, so it only starts a mode the
-    /// user has started from fiddle's UI (see HotkeyTrust).
+    /// user has started from fiddle's UI (see TrustState).
     func toggleStartStop() {
         if status == .running {
             stopAll()
@@ -376,10 +489,17 @@ final class FiddleController {
     /// without a valid seal can hold a planted macro, recording, or config,
     /// and nothing the user saw on screen chose it.
     private func hotkeyMayStart(_ mode: AutomationMode) -> Bool {
-        guard !store.isTrustedForHotkeys(mode) else { return true }
-        NSSound.beep()
-        broadcast(.error(message: "Start \(Self.modeLabel(mode)) once from the fiddle window before using a hotkey to start it."))
-        return false
+        guard store.isTrustedForHotkeys(mode) else {
+            NSSound.beep()
+            broadcast(.error(message: "Start \(Self.modeLabel(mode)) once from the fiddle window before using a hotkey to start it."))
+            return false
+        }
+        guard unverifiedItem(mode: mode, config: config(for: mode)) == nil else {
+            NSSound.beep()
+            broadcast(.error(message: "Play this from the fiddle window first: it came from settings fiddle could not verify."))
+            return false
+        }
+        return true
     }
 
     private func setStatus(_ newStatus: RunStatus) {
@@ -396,14 +516,34 @@ final class FiddleController {
     // MARK: - Hotkeys
 
     private func configureHotkeys() {
-        hotkeys.onStartStop = { [weak self] in self?.hotkeyStartStop() }
-        hotkeys.onToggleJiggler = { [weak self] in self?.hotkeyToggleJiggler() }
-        hotkeys.onPickPosition = { [weak self] in self?.beginPick() }
-        hotkeys.onPanic = { [weak self] in self?.panic() }
+        // A press is acted on only while every stored binding still matches
+        // the sealed copy; panic always stops everything regardless.
+        hotkeys.onStartStop = { [weak self] in if self?.reconcileHotkeys() == true { self?.hotkeyStartStop() } }
+        hotkeys.onToggleJiggler = { [weak self] in if self?.reconcileHotkeys() == true { self?.hotkeyToggleJiggler() } }
+        hotkeys.onPickPosition = { [weak self] in if self?.reconcileHotkeys() == true { self?.beginPick() } }
+        hotkeys.onPanic = { [weak self] in self?.panic(); self?.reconcileHotkeys() }
+        var trusted = store.trust.bindings
+        #if DEBUG
         // The XCTest host's store is a throwaway, while the bindings live in
         // the real defaults domain: there, only the modifier rule is applied.
-        hotkeys.register(trusted: store.isScratch ? hotkeys.currentTokens() : store.trust.bindings)
-        store.recordHotkeyBindings(hotkeys.currentTokens())
+        if store.isScratch { trusted = hotkeys.currentTokens() }
+        #endif
+        hotkeys.register(trusted: trusted)
+        store.recordHotkeyBindings(HotkeyManager.expectedTokens(trusted: trusted))
+        hotkeys.observeStoredBindings { [weak self] in self?.reconcileHotkeys() }
+    }
+
+    /// Put back any stored binding that no longer matches the sealed copy and
+    /// tell the user. Returns true when nothing had to be put back.
+    @discardableResult
+    private func reconcileHotkeys() -> Bool {
+        let changed = hotkeys.reconcile(trusted: store.trust.bindings)
+        guard !changed.isEmpty else { return true }
+        emitHotkeys()
+        let message = Self.hotkeysPutBackMessage(changed)
+        broadcast(.error(message: message))
+        alert(title: "Hotkeys were changed", text: message)
+        return false
     }
 
     private func setHotkey(action: HotkeyAction, combo: String) {
@@ -427,8 +567,13 @@ final class FiddleController {
             emitHotkeys()
             return
         }
+        // Undo any outside change to the other bindings first, so only the one
+        // the user chose here is sealed, and seal it before it is stored.
+        reconcileHotkeys()
+        if let token = HotkeyCombo.string(from: shortcut) {
+            store.recordHotkeyBinding(action.rawValue, token: token)
+        }
         hotkeys.setShortcut(shortcut, for: action)
-        store.recordHotkeyBindings(hotkeys.currentTokens())
         emitHotkeys()
     }
 
@@ -548,30 +693,9 @@ final class FiddleController {
         // web view is created on first open; hotkeys work before that). Without
         // this it shows Idle and its flame would restart instead of stop.
         send(.status(status), to: sink)
-        if store.didResetToDefaults {
-            store.acknowledgeReset()
-            send(.error(message: "Saved settings could not be read and were reset to defaults. The unreadable data is kept under the fiddle.settings.v1.backup defaults key."), to: sink)
-        }
-        if store.didRejectTamperedSettings {
-            store.acknowledgeRejection()
-            send(.error(message: "Saved settings were changed outside fiddle, so they were not loaded and defaults are in use. The changed data is kept under the fiddle.settings.v1.rejected defaults key."), to: sink)
-        }
-        switch store.adoption {
-        case .inherited:
-            send(.error(message: "Your settings were brought over from the previous version of fiddle. For safety, start each mode once from the fiddle window before starting it with a hotkey."), to: sink)
-        case .unverified:
-            send(.error(message: "fiddle could not verify its saved settings, so something else may have changed them. Check your macros and recording, and start each mode once from the fiddle window before starting it with a hotkey."), to: sink)
-        case nil: break
-        }
-        store.acknowledgeAdoption()
-        if !hotkeys.resetActions.isEmpty {
-            let names = hotkeys.resetActions.map(Self.hotkeyLabel).joined(separator: ", ")
-            send(.error(message: "Hotkeys changed outside fiddle, or not safe as system-wide hotkeys, were put back: \(names)."), to: sink)
-            hotkeys.acknowledgeResets()
-        }
-        if store.isSealUnavailable && !sealNoticeShown {
-            sealNoticeShown = true
-            send(.error(message: "fiddle could not read its settings key from the Keychain, so changes this session will not be saved."), to: sink)
+        // Logged on every surface; the alert is what makes sure they are seen.
+        for notice in startupNotices {
+            send(.error(message: notice), to: sink)
         }
     }
 
@@ -733,6 +857,16 @@ final class FiddleController {
         guard let p = store.settings.profiles.first(where: { $0.id == id }) else {
             broadcast(.error(message: "That profile was not found."))
             return
+        }
+        if startupNoticesPending {
+            presentStartupNotices()
+            if startupNoticesPending { return }
+        }
+        if store.isUnverifiedProfile(id) {
+            guard alert(title: "Apply unverified profile?",
+                        text: "\u{201C}\(p.name)\u{201D} came from settings fiddle could not verify, so another program may have planted or changed it. Applying it replaces your Auto Clicker, Jiggler, Wake Lock, Anti-AFK, and Auto Presser settings.",
+                        confirm: "Apply") else { return }
+            store.confirmProfile(id)
         }
         store.update { settings in
             settings.clicker = p.clicker

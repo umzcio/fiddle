@@ -500,7 +500,7 @@ final class SettingsSealTests: XCTestCase {
         let adopted = SettingsStore(defaults: defaults, keys: keys)
         XCTAssertFalse(adopted.isTrustedForHotkeys(.macro))
         adopted.setPref("skin", .string("cobalt"))                     // re-sealed, still untrusted
-        let forged = try! JSONEncoder().encode(HotkeyTrust.full)
+        let forged = try! JSONEncoder().encode(TrustState.full)
         defaults.set(forged, forKey: "fiddle.settings.v1.trust")
 
         let reloaded = SettingsStore(defaults: defaults, keys: keys)
@@ -585,5 +585,86 @@ final class SettingsSealTests: XCTestCase {
         XCTAssertNil(reloaded.adoption)                              // own sealed copy wins
         XCTAssertEqual(reloaded.settings.macros.map(\.id), ["m9"])
         XCTAssertEqual(reloaded.settings.prefs.skin, "red")
+    }
+
+    /// A planted blob carrying every kind of saved automation.
+    private let plantedEverything = #"""
+    {"macros":[{"id":"m9","name":"planted","steps":[]}],
+     "profiles":[{"id":"p9","name":"planted","device":"mouse"}],
+     "recording":[{"kind":"down","button":"left","x":1,"y":1,"delayMs":0}]}
+    """#
+
+    func testAdoptedAutomationNeedsConfirmationUntilConfirmed() {
+        let keys = SuiteKeyStore(defaults)
+        defaults.set(Data(plantedEverything.utf8), forKey: "fiddle.settings.v1")
+
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertTrue(store.isUnverifiedMacro("m9"))
+        XCTAssertTrue(store.isUnverifiedProfile("p9"))
+        XCTAssertTrue(store.isRecordingUnverified)
+
+        store.confirmMacro("m9")
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertFalse(reloaded.isUnverifiedMacro("m9"))           // confirmation is sealed
+        XCTAssertTrue(reloaded.isUnverifiedProfile("p9"))
+        XCTAssertTrue(reloaded.isRecordingUnverified)
+    }
+
+    func testNewRecordingAndDeletedItemsClearTheFlags() {
+        let keys = SuiteKeyStore(defaults)
+        defaults.set(Data(plantedEverything.utf8), forKey: "fiddle.settings.v1")
+        let store = SettingsStore(defaults: defaults, keys: keys)
+
+        store.setRecording([])
+        store.setMacros([])
+        store.setProfiles([])
+        XCTAssertFalse(store.isRecordingUnverified)
+        XCTAssertTrue(store.trust.unverifiedMacros.isEmpty)
+        XCTAssertTrue(store.trust.unverifiedProfiles.isEmpty)
+    }
+
+    func testOwnSettingsAreNotFlagged() {
+        let keys = SuiteKeyStore(defaults)
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        store.setMacros([Macro(id: "mine", name: "mine", steps: [])])
+        XCTAssertFalse(SettingsStore(defaults: defaults, keys: keys).isUnverifiedMacro("mine"))
+    }
+
+    // Once fiddle has run under its own id, a copy under the old id is never
+    // imported again: another process could have put it there.
+    func testLegacyCopyIsIgnoredOnceTheKeyExists() {
+        let legacySuite = "fiddle.test.legacy.\(UUID().uuidString)"
+        let legacy = UserDefaults(suiteName: legacySuite)!
+        defer { legacy.removePersistentDomain(forName: legacySuite) }
+        let keys = SuiteKeyStore(defaults)
+        SettingsStore(defaults: defaults, keys: keys, legacy: legacy).setPref("skin", .string("cobalt"))
+
+        defaults.removeObject(forKey: "fiddle.settings.v1")
+        legacy.set(Data(planted.utf8), forKey: "fiddle.settings.v1")
+        let reloaded = SettingsStore(defaults: defaults, keys: keys, legacy: legacy)
+        XCTAssertNil(reloaded.adoption)
+        XCTAssertTrue(reloaded.didFindSettingsMissing)
+        XCTAssertEqual(reloaded.settings, .default)
+    }
+
+    // Rebinding one hotkey seals only that binding, never a read-back of the
+    // others from the unsealed defaults.
+    func testRecordingOneBindingKeepsTheOthersAsSealed() {
+        let keys = SuiteKeyStore(defaults)
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        store.recordHotkeyBindings(["startStop": "F6", "panic": "cmd+Escape"])
+        store.recordHotkeyBinding("startStop", token: "ctrl+KeyJ")
+        XCTAssertEqual(SettingsStore(defaults: defaults, keys: keys).trust.bindings,
+                       ["startStop": "ctrl+KeyJ", "panic": "cmd+Escape"])
+    }
+
+    // A trust state sealed by 1.1.0 has no unverified-item fields.
+    func testDecodesTrustStateFrom110() throws {
+        let old = #"{"bindings":{"startStop":"F6"},"modes":["clicker"]}"#
+        let state = try JSONDecoder().decode(TrustState.self, from: Data(old.utf8))
+        XCTAssertEqual(state.modes, ["clicker"])
+        XCTAssertEqual(state.bindings, ["startStop": "F6"])
+        XCTAssertTrue(state.unverifiedMacros.isEmpty)
+        XCTAssertFalse(state.unverifiedRecording)
     }
 }

@@ -41,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !controller.store.settings.prefs.menuBarOnly {
             wc.show()
         }
+        // Warnings about unverified settings get a native alert, on the next
+        // turn of the run loop so the window (if any) is up behind it.
+        DispatchQueue.main.async { [controller] in controller.presentStartupNotices() }
     }
 
     /// Triggered by the About overlay's "Check for Updates" button.
@@ -54,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationDidBecomeActive(_ notification: Notification) {
         controller.recheckPermissions()
+        controller.presentStartupNotices()
     }
     func applicationWillTerminate(_ notification: Notification) {
         controller.shutdown()
