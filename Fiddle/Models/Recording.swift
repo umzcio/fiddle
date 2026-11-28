@@ -95,6 +95,28 @@ enum RecordEventMapping {
 }
 
 enum RecordedSequence {
+    /// The macro steps the sequencer's "Import last recording" appends for a
+    /// recording (app.js importRecording builds the same list from these
+    /// display steps; keep the two in step). Used to carry an unverified
+    /// recording's flag over to the macro it is imported into.
+    static func importedMacroSteps(_ display: [DisplayStep]) -> [MacroStep] {
+        var out: [MacroStep] = []
+        for s in display {
+            if s.delayMs > 0 {
+                out.append(MacroStep(kind: .wait, button: .left, clickType: .single, x: 0, y: 0, ms: s.delayMs))
+            }
+            switch s.kind {
+            case "click", "press":
+                out.append(MacroStep(kind: .click, button: s.button, clickType: s.clickType == .double ? .double : .single, x: s.x, y: s.y, ms: 0))
+            case "move":
+                out.append(MacroStep(kind: .move, button: .left, clickType: .single, x: s.x, y: s.y, ms: 0))
+            default:
+                break
+            }
+        }
+        return out
+    }
+
     /// Coalesce a down+up of the same button at the same point into one "click"
     /// row; render anything else as a press/release row. A coalesced click shows
     /// the down event's delay.

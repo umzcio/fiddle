@@ -157,6 +157,8 @@ final class FiddleController {
             notices.append("Your settings were brought over from the previous version of fiddle. fiddle will ask before playing a macro, recording, or profile it brought over, and each mode must be started once from the fiddle window before a hotkey can start it.")
         case .unverified:
             notices.append("fiddle could not verify its saved settings, so another program may have changed them. fiddle will ask before playing any saved macro, recording, or profile, and each mode must be started once from the fiddle window before a hotkey can start it.")
+        case .olderVersion:
+            notices.append("These settings were last saved by fiddle 1.1.0, which did not keep track of where each macro, recording, and profile came from. fiddle will ask once before playing or applying each of them.")
         case nil: break
         }
         if !hotkeys.resetActions.isEmpty {

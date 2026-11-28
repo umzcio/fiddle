@@ -69,6 +69,14 @@ struct TrustState: Codable, Equatable {
     var unverifiedMacros: [String] = []
     var unverifiedProfiles: [String] = []
     var unverifiedRecording = false
+    /// Digests of the steps of unverified macros, so the flag follows content
+    /// that is duplicated or saved again under another id.
+    var unverifiedMacroSteps: [String] = []
+    /// False for a state written by fiddle 1.1.0, which did not track
+    /// unverified items (and so cannot write these fields). Such a state says
+    /// nothing about where the saved automation came from. Not encoded: the
+    /// presence of the fields above is the marker.
+    var tracksItems = true
 
     static let full = TrustState(modes: AutomationMode.allCases.map(\.rawValue), bindings: nil)
     static let none = TrustState(modes: [], bindings: nil)
@@ -78,13 +86,15 @@ struct TrustState: Codable, Equatable {
         self.bindings = bindings
     }
 
-    private enum CodingKeys: String, CodingKey { case modes, bindings, unverifiedMacros, unverifiedProfiles, unverifiedRecording }
+    private enum CodingKeys: String, CodingKey { case modes, bindings, unverifiedMacros, unverifiedProfiles, unverifiedRecording, unverifiedMacroSteps }
 
-    // 1.1.0 sealed only `modes` and `bindings`.
+    // 1.1.0 sealed only `modes` and `bindings`; 1.1.1 had no step digests.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         modes = try c.decode([String].self, forKey: .modes)
         bindings = try c.decodeIfPresent([String: String].self, forKey: .bindings)
+        tracksItems = c.contains(.unverifiedMacros)
+        unverifiedMacroSteps = try c.decodeIfPresent([String].self, forKey: .unverifiedMacroSteps) ?? []
         unverifiedMacros = try c.decodeIfPresent([String].self, forKey: .unverifiedMacros) ?? []
         unverifiedProfiles = try c.decodeIfPresent([String].self, forKey: .unverifiedProfiles) ?? []
         unverifiedRecording = try c.decodeIfPresent(Bool.self, forKey: .unverifiedRecording) ?? false

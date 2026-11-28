@@ -610,17 +610,16 @@ final class SettingsSealTests: XCTestCase {
         XCTAssertTrue(reloaded.isRecordingUnverified)
     }
 
-    func testNewRecordingAndDeletedItemsClearTheFlags() {
+    // A recording made or cleared in fiddle replaces the unverified one.
+    // (Deleting a macro or profile does not clear its flag; see
+    // testDeleteThenUndoKeepsTheFlag.)
+    func testNewRecordingClearsTheRecordingFlag() {
         let keys = SuiteKeyStore(defaults)
         defaults.set(Data(plantedEverything.utf8), forKey: "fiddle.settings.v1")
         let store = SettingsStore(defaults: defaults, keys: keys)
 
         store.setRecording([])
-        store.setMacros([])
-        store.setProfiles([])
         XCTAssertFalse(store.isRecordingUnverified)
-        XCTAssertTrue(store.trust.unverifiedMacros.isEmpty)
-        XCTAssertTrue(store.trust.unverifiedProfiles.isEmpty)
     }
 
     func testOwnSettingsAreNotFlagged() {
@@ -666,5 +665,110 @@ final class SettingsSealTests: XCTestCase {
         XCTAssertEqual(state.bindings, ["startStop": "F6"])
         XCTAssertTrue(state.unverifiedMacros.isEmpty)
         XCTAssertFalse(state.unverifiedRecording)
+    }
+
+    // MARK: Flags follow content (find_011LmmijLhZ3kfELE8rTkKPu)
+
+    private let click11 = MacroStep(kind: .click, button: .left, clickType: .single, x: 1, y: 1, ms: 0)
+
+    /// A planted macro with steps, a profile, and a recording of one click.
+    private let plantedWithSteps = #"""
+    {"macros":[{"id":"m9","name":"planted","steps":[{"kind":"click","button":"left","clickType":"single","x":10,"y":10,"ms":0}]}],
+     "profiles":[{"id":"p9","name":"planted","device":"mouse"}],
+     "recording":[{"kind":"down","button":"left","x":1,"y":1,"delayMs":0},{"kind":"up","button":"left","x":1,"y":1,"delayMs":5}]}
+    """#
+
+    private func adoptedStore() -> SettingsStore {
+        defaults.set(Data(plantedWithSteps.utf8), forKey: "fiddle.settings.v1")
+        return SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults))
+    }
+
+    func testDeleteThenUndoKeepsTheFlag() {
+        let store = adoptedStore()
+        let macro = store.settings.macros[0], profile = store.settings.profiles[0]
+        store.setMacros([]); store.setMacros([macro])
+        store.setProfiles([]); store.setProfiles([profile])
+        XCTAssertTrue(store.isUnverifiedMacro("m9"))
+        XCTAssertTrue(store.isUnverifiedProfile("p9"))
+    }
+
+    func testDuplicateOfAFlaggedMacroIsFlagged() {
+        let store = adoptedStore()
+        var copy = store.settings.macros[0]; copy.id = "m10"; copy.name = "planted copy"
+        store.setMacros(store.settings.macros + [copy])
+        XCTAssertTrue(store.isUnverifiedMacro("m10"))
+        XCTAssertTrue(SettingsStore(defaults: defaults, keys: SuiteKeyStore(defaults)).isUnverifiedMacro("m10"))
+    }
+
+    func testDuplicateOfAnEditedFlaggedMacroIsFlagged() {
+        let store = adoptedStore()
+        var edited = store.settings.macros[0]; edited.steps.append(click11)
+        store.setMacros([edited])
+        var copy = edited; copy.id = "m10"
+        store.setMacros([edited, copy])
+        XCTAssertTrue(store.isUnverifiedMacro("m10"))
+    }
+
+    func testImportingAnUnverifiedRecordingFlagsTheMacro() {
+        let store = adoptedStore()
+        let imported = RecordedSequence.importedMacroSteps(RecordedSequence.displaySteps(store.settings.recording))
+        XCTAssertFalse(imported.isEmpty)
+        let mine = Macro(id: "mine", name: "mine", steps: [MacroStep(kind: .wait, button: .left, clickType: .single, x: 0, y: 0, ms: 50)] + imported)
+        store.setMacros(store.settings.macros + [mine])
+        XCTAssertTrue(store.isUnverifiedMacro("mine"))
+    }
+
+    func testMacrosBuiltFromScratchAreNotFlagged() {
+        let store = adoptedStore()
+        let mine = Macro(id: "mine", name: "mine", steps: [MacroStep(kind: .click, button: .left, clickType: .single, x: 400, y: 300, ms: 0)])
+        store.setMacros(store.settings.macros + [mine])
+        XCTAssertFalse(store.isUnverifiedMacro("mine"))
+    }
+
+    // MARK: States sealed by 1.1.0 (find_01PSicfDzLwmjEUtVtx8xWBY)
+
+    /// Reseal the stored blob with a 1.1.0-shaped trust state, as a genuine
+    /// 1.1.0 build would after adopting it.
+    private func resealAs110(modes: [String]) {
+        let data = defaults.data(forKey: "fiddle.settings.v1")!
+        let state = try! JSONSerialization.data(withJSONObject: ["modes": modes, "bindings": ["startStop": "ctrl+KeyJ"]], options: [.sortedKeys])
+        let key = SymmetricKey(data: defaults.data(forKey: "test.sealKey")!)
+        defaults.set(state, forKey: "fiddle.settings.v1.trust")
+        defaults.set(SettingsSeal.seal(data, state: state, key: key), forKey: "fiddle.settings.v1.seal")
+    }
+
+    func testStateSealedBy110FlagsEverythingOnce() {
+        let keys = SuiteKeyStore(defaults)
+        _ = adoptedStore()
+        resealAs110(modes: ["clicker"])
+
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertEqual(store.adoption, .olderVersion)
+        XCTAssertFalse(store.didRejectTamperedSettings)
+        XCTAssertTrue(store.isUnverifiedMacro("m9"))
+        XCTAssertTrue(store.isUnverifiedProfile("p9"))
+        XCTAssertTrue(store.isRecordingUnverified)
+        XCTAssertNil(store.trust.bindings)                        // 1.1.0 read them back unsealed
+        XCTAssertTrue(store.isTrustedForHotkeys(.clicker))
+
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertNil(reloaded.adoption)                            // resealed in the tracking form
+        XCTAssertTrue(reloaded.isUnverifiedMacro("m9"))
+    }
+
+    func testStateSealedByThisVersionLoadsWithoutFlags() {
+        let keys = SuiteKeyStore(defaults)
+        let store = SettingsStore(defaults: defaults, keys: keys)
+        store.setMacros([Macro(id: "mine", name: "mine", steps: [click11])])
+        let reloaded = SettingsStore(defaults: defaults, keys: keys)
+        XCTAssertNil(reloaded.adoption)
+        XCTAssertFalse(reloaded.isUnverifiedMacro("mine"))
+    }
+
+    func testTrustStateFrom110IsMarkedUntracked() throws {
+        let old = #"{"bindings":{"startStop":"F6"},"modes":["clicker"]}"#
+        XCTAssertFalse(try JSONDecoder().decode(TrustState.self, from: Data(old.utf8)).tracksItems)
+        let current = try JSONEncoder().encode(TrustState.none)
+        XCTAssertTrue(try JSONDecoder().decode(TrustState.self, from: current).tracksItems)
     }
 }

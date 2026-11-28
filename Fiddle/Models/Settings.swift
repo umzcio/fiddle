@@ -136,6 +136,10 @@ final class SettingsStore {
         /// Found without a valid seal under fiddle's own id (key deleted or
         /// unreadable).
         case unverified
+        /// Sealed by fiddle 1.1.0, which did not track where saved automation
+        /// came from (and which another process could run to seal planted
+        /// settings with the real key).
+        case olderVersion
     }
 
     private static let key = "fiddle.settings.v1"
@@ -202,6 +206,15 @@ final class SettingsStore {
                    let stored = try? JSONDecoder().decode(TrustState.self, from: state) {
                     settings = decode(own)
                     trust = stored
+                    if !stored.tracksItems {
+                        // Nothing in a 1.1.0 state vouches for the saved
+                        // automation, and its bindings were read back from
+                        // unsealed defaults. Reseal in a form 1.1.0 cannot write.
+                        flagAllSavedAutomation()
+                        trust.bindings = nil
+                        adoption = .olderVersion
+                        save()
+                    }
                 } else {
                     // Defaults hold no planted target, so full trust is safe;
                     // the nil bindings make launch reset the hotkeys too.
@@ -239,11 +252,29 @@ final class SettingsStore {
     private func adopt(_ data: Data, as how: Adoption) {
         settings = decode(data)
         trust = .none
-        trust.unverifiedMacros = settings.macros.map(\.id)
-        trust.unverifiedProfiles = settings.profiles.map(\.id)
-        trust.unverifiedRecording = !settings.recording.isEmpty
+        flagAllSavedAutomation()
         if !didResetToDefaults { adoption = how }
     }
+
+    private func flagAllSavedAutomation() {
+        trust.unverifiedMacros = settings.macros.map(\.id)
+        trust.unverifiedMacroSteps = settings.macros.filter { !$0.steps.isEmpty }.map { Self.stepsDigest($0.steps) }
+        trust.unverifiedProfiles = settings.profiles.map(\.id)
+        trust.unverifiedRecording = !settings.recording.isEmpty
+        trust.tracksItems = true
+    }
+
+    /// A short digest of a macro's steps, to recognize its content under
+    /// another id.
+    static func stepsDigest(_ steps: [MacroStep]) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let data = (try? encoder.encode(steps)) ?? Data()
+        return SHA256.hash(data: data).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The most step digests kept; the oldest go first.
+    private static let maxStepDigests = 1000
 
     private func decode(_ data: Data) -> Settings {
         do {
@@ -266,7 +297,14 @@ final class SettingsStore {
     var isRecordingUnverified: Bool { trust.unverifiedRecording }
 
     /// The user confirmed an unverified item after being told what it is.
-    func confirmMacro(_ id: String) { trust.unverifiedMacros.removeAll { $0 == id }; save() }
+    func confirmMacro(_ id: String) {
+        trust.unverifiedMacros.removeAll { $0 == id }
+        if let steps = settings.macros.first(where: { $0.id == id })?.steps {
+            let digest = Self.stepsDigest(steps)
+            trust.unverifiedMacroSteps.removeAll { $0 == digest }
+        }
+        save()
+    }
     func confirmProfile(_ id: String) { trust.unverifiedProfiles.removeAll { $0 == id }; save() }
     func confirmRecording() { trust.unverifiedRecording = false; save() }
 
@@ -318,12 +356,40 @@ final class SettingsStore {
         save()
     }
     func setRecorder(_ config: RecorderConfig) { settings.recorder = config; save() }
-    /// Unverified ids stay flagged while the macro exists, even if edited.
+    /// The unverified flag follows content, not just ids: a flagged id stays
+    /// flagged even while absent (delete, then undo), a macro whose steps match
+    /// unverified content is flagged (duplicate, save under a new id), and so is
+    /// one that holds an unverified recording's imported steps.
     func setMacros(_ macros: [Macro]) {
         settings.macros = macros
-        let ids = Set(macros.map(\.id))
-        trust.unverifiedMacros.removeAll { !ids.contains($0) }
+        var flagged = trust.unverifiedMacros
+        var digests = trust.unverifiedMacroSteps
+        // Flagged macros carry their (possibly edited) content into the set.
+        for m in macros where flagged.contains(m.id) && !m.steps.isEmpty {
+            let d = Self.stepsDigest(m.steps)
+            if !digests.contains(d) { digests.append(d) }
+        }
+        let imported = trust.unverifiedRecording
+            ? Array(RecordedSequence.importedMacroSteps(RecordedSequence.displaySteps(settings.recording)).prefix(8))
+            : []
+        for m in macros where !flagged.contains(m.id) && !m.steps.isEmpty {
+            if digests.contains(Self.stepsDigest(m.steps)) || Self.contains(m.steps, imported) {
+                flagged.append(m.id)
+                digests.append(Self.stepsDigest(m.steps))
+            }
+        }
+        trust.unverifiedMacros = flagged
+        trust.unverifiedMacroSteps = Array(digests.suffix(Self.maxStepDigests))
         save()
+    }
+
+    /// Whether `steps` holds `run` as a contiguous stretch (false for an empty run).
+    private static func contains(_ steps: [MacroStep], _ run: [MacroStep]) -> Bool {
+        guard !run.isEmpty, steps.count >= run.count else { return false }
+        for start in 0...(steps.count - run.count) where steps[start] == run[0] {
+            if Array(steps[start..<start + run.count]) == run { return true }
+        }
+        return false
     }
 
     func setPref(_ key: String, _ value: PrefValue) {
@@ -341,10 +407,9 @@ final class SettingsStore {
     }
 
     func setKeyboard(_ config: KeyboardConfig) { settings.keyboard = config; save() }
+    /// Flagged profile ids stay flagged even while absent (delete, then undo).
     func setProfiles(_ profiles: [Profile]) {
         settings.profiles = profiles
-        let ids = Set(profiles.map(\.id))
-        trust.unverifiedProfiles.removeAll { !ids.contains($0) }
         save()
     }
 

@@ -500,6 +500,9 @@
   function deleteStep(i){ const m=selectedMacro(); if(!m) return; m.steps.splice(i,1); saveMacros(); viewSequencer(); applyBanner(); }
   function importRecording(){
     const m=selectedMacro(); if(!m) return;
+    // RecordedSequence.importedMacroSteps (Recording.swift) builds the same
+    // steps so an unverified recording's flag follows it into the macro.
+    // Change both together.
     // The native side is the real enforcement (FiddleController.capped truncates
     // the saved library to 10,000 steps total), but importing appends a wait
     // plus an action per recorded step, so a long recording can build a huge
